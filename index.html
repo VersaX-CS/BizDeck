@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Sacramento&family=Caveat:wght@500;700&family=Parisienne&display=swap');
   :root{
     --bg:#E7E1D3; --surface:#FBF9F3; --ink:#26221B; --ink-soft:#645E50;
     --primary:#1E3A3A; --primary-dark:#122626; --gold:#B8842E; --gold-soft:#E7D2A4;
@@ -143,6 +143,9 @@
 
   .bank-entry{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;position:relative;}
 
+  .sigpad-canvas{width:100%;height:140px;display:block;border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;}
+  .sig-preview-box{border:1px solid var(--line);border-radius:8px;background:#fff;padding:14px;display:flex;align-items:center;justify-content:center;min-height:96px;text-align:center;}
+
   .pill[class*="status-"]{background:var(--gold-soft);color:#8A5F1F;} /* default for any status not listed below */
   .status-pending{background:var(--gold-soft);color:#8A5F1F;}
   .status-cutting{background:var(--gold-soft);color:#8A5F1F;}
@@ -166,6 +169,11 @@
   .status-closed{background:var(--green-soft);color:var(--green);}
   .status-fulfilled{background:var(--green-soft);color:var(--green);}
   .status-cancelled{background:#EDEAE0;color:var(--ink-soft);}
+  .status-draft{background:#EDEAE0;color:var(--ink-soft);}
+  .status-sent{background:var(--gold-soft);color:#8A5F1F;}
+  .status-accepted{background:var(--green-soft);color:var(--green);}
+  .status-declined{background:var(--rust-soft);color:var(--rust);}
+  .status-expired{background:#EDEAE0;color:var(--ink-soft);}
 
   .empty{color:var(--ink-soft);font-size:13.5px;padding:6px 0;}
   .rowline{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);}
@@ -268,6 +276,10 @@ const ICONS = {
   fingerprint:'<path d="M12 2a8 8 0 0 1 8 8c0 2-.3 3.8-.9 5.5"/><path d="M6.1 5.8A8 8 0 0 0 4 10c0 4-1 7-2 8.5"/><path d="M12 6a6 6 0 0 1 6 6c0 3.5-.7 6-1.6 7.7"/><path d="M8 7.6A6 6 0 0 0 6 10c0 5-1.2 7.5-2 8.7"/><path d="M12 10a2 2 0 0 1 2 2c0 3.5-.7 6.2-2 8.3"/><path d="M10 10.3a2 2 0 0 0-1 1.7c0 3-.5 5.5-1.7 7.7"/>',
   help:'<circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4.9c0 1.8-2.6 2.3-2.6 4"/><circle cx="12" cy="17" r=".35" fill="currentColor"/>',
   share:'<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 5 12 1 8 5"/><line x1="12" y1="1" x2="12" y2="11"/>',
+  box:'<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  arrowUp:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  arrowDown:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  ledger:'<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18v18H6.5A1.5 1.5 0 0 1 5 19.5v-15z"/><path d="M8 3v18"/><path d="M11 8h5M11 11.5h5"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -503,13 +515,25 @@ const MUTATING_ACTIONS = new Set([
   "delete-client","open-client-modal-new","open-client-modal","pick-contact-phone","save-client",
   "open-order-modal-new","open-order-modal-new-for-client","open-order-modal",
   "add-order-item","remove-order-item","add-payment","remove-payment","save-order","delete-order",
-  "duplicate-order","bulk-set-status",
+  "duplicate-order","bulk-set-status","convert-quote-to-order","generate-recurring-from-modal","generate-recurring",
   "add-category","delete-category","open-catitem-modal-new","open-catitem-modal",
   "add-catitem-to-new-order","pick-catalog-item","save-catitem","delete-catitem",
   "remove-gallery-image","remove-image","select-theme","open-custom-theme-modal","save-custom-theme","add-bank-account","remove-bank-account",
+  "set-signature-mode","set-signature-font","clear-signature-canvas","save-signature-canvas","start-signature-redraw","cancel-signature-redraw","remove-signature",
   "reset-app-data",
+  "open-inv-modal-new","open-inv-modal","save-inv-item","delete-inv-item",
+  "open-stockmove-modal","save-stockmove",
+  "open-vendor-modal-new","open-vendor-modal","save-vendor","delete-vendor",
+  "open-expense-modal-new","open-expense-modal","save-expense","delete-expense",
 ]);
-const MUTATING_CHANGE_ACTIONS = new Set(["upload-logo","upload-images","upload-gallery-images","import-data-file","toggle-auto-backup","toggle-dark-mode"]);
+const MUTATING_CHANGE_ACTIONS = new Set(["upload-logo","upload-images","upload-gallery-images","import-data-file","toggle-auto-backup","toggle-dark-mode","upload-signature-image","toggle-signature-invoice","toggle-signature-receipt"]);
+const SIGNATURE_FONTS = [
+  { key:"Dancing Script", label:"Dancing Script" },
+  { key:"Great Vibes", label:"Great Vibes" },
+  { key:"Sacramento", label:"Sacramento" },
+  { key:"Caveat", label:"Caveat" },
+  { key:"Parisienne", label:"Parisienne" },
+];
 const DEV_NAME = "Morris Okereke";
 const DEV_STUDIO = "VersaX CS";
 const DEV_EMAIL = "info.versax@gmail.com";
@@ -562,8 +586,26 @@ const statusInfo = (s) => currentStatuses().find(x=>x.key===s) || currentStatuse
 const statusClass = (s) => "status-"+(s||"pending").toLowerCase().replace(/\s+/g,"-");
 
 const waLink = (phone, text) => { const digits=(phone||"").replace(/[^0-9]/g,""); return "https://wa.me/"+digits+"?text="+encodeURIComponent(text); };
-const orderTotal = (o) => (o.items||[]).reduce((s,i)=>s+Number(i.price||0),0);
+const orderSubtotal = (o) => (o.items||[]).reduce((s,i)=>s+Number(i.price||0),0);
+const orderDiscountAmount = (o) => {
+  const sub = orderSubtotal(o);
+  const val = Number(o.discountValue||0);
+  if(!val) return 0;
+  if(o.discountType==="flat") return Math.max(0, Math.min(val, sub));
+  return sub * (Math.max(0,Math.min(100,val))/100);
+};
+const orderTaxableAmount = (o) => Math.max(0, orderSubtotal(o) - orderDiscountAmount(o));
+const orderTaxAmount = (o) => orderTaxableAmount(o) * (Math.max(0,Number(o.taxPercent||0))/100);
+const orderTotal = (o) => orderTaxableAmount(o) + orderTaxAmount(o);
 const orderPaid = (o) => (o.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);
+const recordKind = (o) => o.kind==="quote" ? "quote" : "order";
+const isRealOrder = (o) => recordKind(o)==="order";
+const isQuoteRecord = (o) => recordKind(o)==="quote";
+const QUOTE_STATUSES = [
+  { key:"Draft", pct:0 }, { key:"Sent", pct:35 }, { key:"Accepted", pct:100 },
+  { key:"Declined", pct:100 }, { key:"Expired", pct:100 },
+];
+const statusesFor = (kind) => kind==="quote" ? QUOTE_STATUSES : currentStatuses();
 
 /* ================= ALERTS / NOTIFICATIONS =================
    Flags orders whose due date is near, today, or already passed —
@@ -573,6 +615,7 @@ const NEAR_DUE_DAYS = 3;
 function buildAlerts(){
   const overdue = [], dueToday = [], nearDue = [];
   state.orders.forEach(o=>{
+    if(isQuoteRecord(o)) return;
     if(o.status==="Cancelled") return;
     const dleft = daysUntil(o.dueDate);
     if(dleft===null || dleft>NEAR_DUE_DAYS) return;
@@ -588,7 +631,46 @@ function buildAlerts(){
   });
   const byDleft = (a,b)=>a.dleft-b.dleft;
   overdue.sort(byDleft); dueToday.sort(byDleft); nearDue.sort(byDleft);
-  return { overdue, dueToday, nearDue, total: overdue.length+dueToday.length+nearDue.length };
+  const renewals = [];
+  state.orders.forEach(o=>{
+    if(isQuoteRecord(o)) return;
+    const r = o.recurring;
+    if(!r || !r.enabled || !r.nextDate) return;
+    const dleft = daysUntil(r.nextDate);
+    if(dleft===null || dleft>NEAR_DUE_DAYS) return;
+    renewals.push({ o, dleft, client: state.clients.find(c=>c.id===o.clientId) });
+  });
+  renewals.sort(byDleft);
+  return { overdue, dueToday, nearDue, renewals, total: overdue.length+dueToday.length+nearDue.length+renewals.length };
+}
+const RECURRING_FREQUENCIES = [
+  { key:"weekly", label:"Weekly" },
+  { key:"monthly", label:"Monthly" },
+  { key:"custom", label:"Custom" },
+];
+function advanceRecurringDate(dateISO, recurring){
+  const d = dateISO ? new Date(dateISO+"T00:00:00") : new Date();
+  if(recurring.frequency==="weekly") d.setDate(d.getDate()+7);
+  else if(recurring.frequency==="custom") d.setDate(d.getDate()+Math.max(1,Number(recurring.intervalDays)||30));
+  else d.setMonth(d.getMonth()+1);
+  return d.toISOString().slice(0,10);
+}
+function generateRecurringInvoice(template){
+  const copy = JSON.parse(JSON.stringify(template));
+  copy.id = uid();
+  copy.status = currentStatuses()[0].key;
+  copy.payments = [];
+  copy.createdAt = todayISO();
+  copy.dueDate = template.recurring.nextDate || todayISO();
+  copy.invoiceNo = null; copy.receiptNo = null; copy.quoteNo = null;
+  copy.seriesId = template.seriesId || template.id;
+  copy.recurring = null;
+  copy.history = [{status:copy.status, at:new Date().toISOString()}];
+  template.recurring.nextDate = advanceRecurringDate(template.recurring.nextDate, template.recurring);
+  template.recurring.lastGeneratedAt = new Date().toISOString();
+  state.orders = state.orders.concat([copy]).map(x=>x.id===template.id?template:x);
+  persistOrders();
+  return copy;
 }
 
 function buildInvoiceText(order, client, business, kind){
@@ -636,6 +718,14 @@ const state = {
   clients: [],
   orders: [],
   catalogue: { categories: [], items: [] },
+  inventory: { items: [], movements: [] },
+  inventorySearch: "",
+  inventoryFilter: "all", // all | low | out
+  inventoryView: "items", // items | reports
+  vendors: [],
+  expenses: [],
+  booksView: "expenses", // expenses | vendors | pnl
+  booksPeriod: "month", // month | lastmonth | all
   business: { name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
   backupSettings: { enabled:false, frequency:"weekly", lastBackupAt:null },
   darkMode: false,
@@ -656,6 +746,7 @@ const state = {
   viewOnly: false, // true while signed in with the demo account
   demoPreview: false, // true when previewing demo data without an actual demo/real session persisted
   orderFilterStatus: "All",
+  orderKind: "order",
   modal: null,     // {type:'client'|'order'|'catitem', draft:{...}, isNew:bool}
   showWelcome: true,
   welcomeIndex: 0,
@@ -1098,17 +1189,41 @@ function seedDemoData(doPersist){
     dueDate: addDaysISO(r.dueDate), status:r.status, notes:"", createdAt: addDaysISO(r.createdAt),
   }));
 
-  if(doPersist){ persistBusiness(); persistClients(); persistOrders(); persistCatalogue(); }
+  // Seed a matching inventory record for any demo catalogue item that
+  // already carries a stock quantity (currently just the retail category),
+  // so the new Stock tab has something real to show in the demo account.
+  const invItems = [];
+  state.catalogue.items.forEach(it=>{
+    const q = it.custom && it.custom.stockQty;
+    if(q===undefined || q==="") return;
+    invItems.push({
+      id:"demo-inv-"+it.id, name:it.name, sku:(it.custom&&it.custom.sku)||"",
+      unit:"pcs", qtyOnHand:Number(q)||0, reorderLevel:5,
+      costPrice: Math.round((it.price||0)*0.6), sellPrice: it.price||0,
+      notes:"", createdAt: addDaysISO(-20), updatedAt: addDaysISO(-2),
+    });
+  });
+  state.inventory = { items: invItems, movements: invItems.slice(0,3).map((it,i)=>(
+    { id:"demo-mv-"+i, itemId:it.id, type:"restock", qty:Math.max(1,Math.round(it.qtyOnHand*0.4)), note:"Initial stock", date: addDaysISO(-20)+"T09:00:00.000Z" }
+  )) };
+
+  if(doPersist){ persistBusiness(); persistClients(); persistOrders(); persistCatalogue(); persistInventory(); }
 }
 function loadRealDataFromStorage(){
   try{
     const c = localStorage.getItem("clients");
     const o = localStorage.getItem("orders");
     const cat = localStorage.getItem("catalogue");
+    const inv = localStorage.getItem("inventory");
+    const ven = localStorage.getItem("vendors");
+    const exp = localStorage.getItem("expenses");
     const b = localStorage.getItem("business");
     state.clients = c ? JSON.parse(c) : [];
     state.orders = o ? JSON.parse(o) : [];
     state.catalogue = cat ? JSON.parse(cat) : { categories:[], items:[] };
+    state.inventory = inv ? JSON.parse(inv) : { items:[], movements:[] };
+    state.vendors = ven ? JSON.parse(ven) : [];
+    state.expenses = exp ? JSON.parse(exp) : [];
     state.business = Object.assign(
       { name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
       b ? JSON.parse(b) : {}
@@ -1121,6 +1236,9 @@ async function loadAll(){
     const c = localStorage.getItem("clients");
     const o = localStorage.getItem("orders");
     const cat = localStorage.getItem("catalogue");
+    const inv = localStorage.getItem("inventory");
+    const ven = localStorage.getItem("vendors");
+    const exp = localStorage.getItem("expenses");
     const b = localStorage.getItem("business");
     const th = localStorage.getItem("theme");
     const dm = localStorage.getItem("darkMode");
@@ -1159,6 +1277,9 @@ async function loadAll(){
       if(c) state.clients = JSON.parse(c);
       if(o) state.orders = JSON.parse(o);
       if(cat) state.catalogue = JSON.parse(cat);
+      if(inv) state.inventory = JSON.parse(inv);
+      if(ven) state.vendors = JSON.parse(ven);
+      if(exp) state.expenses = JSON.parse(exp);
       if(b) state.business = Object.assign({}, state.business, JSON.parse(b));
     }
     // Auth state is intentionally NOT loaded from storage: every fresh
@@ -1191,6 +1312,9 @@ function persist(key, value){
 const persistClients = () => persist("clients", state.clients);
 const persistOrders = () => persist("orders", state.orders);
 const persistCatalogue = () => persist("catalogue", state.catalogue);
+const persistInventory = () => persist("inventory", state.inventory);
+const persistVendors = () => persist("vendors", state.vendors);
+const persistExpenses = () => persist("expenses", state.expenses);
 const persistBusiness = () => persist("business", state.business);
 const persistBackupSettings = () => persist("backupSettings", state.backupSettings);
 const persistAccount = () => persist("account", state.account);
@@ -1285,6 +1409,8 @@ function render(){
     {key:"clients", label:nounFor("clientPlural"), icon:"users"},
     {key:"orders", label:nounFor("recordPlural"), icon:"bag"},
     {key:"catalogue", label:nounFor("catalogue"), icon:"image"},
+    {key:"inventory", label:"Stock", icon:"box"},
+    {key:"books", label:"Books", icon:"ledger"},
     {key:"account", label:"Account", icon:"account"},
   ];
 
@@ -1323,6 +1449,7 @@ function render(){
   if(contentEl) contentEl.scrollTop = contentScroll;
 
   if(state.tab === "dashboard") renderDashboardCharts();
+  if(state.tab === "account") initSignaturePad();
   renderTourOverlay();
 }
 
@@ -1331,13 +1458,15 @@ function renderTabContent(){
   if(state.tab === "clients") return state.selectedClientId ? renderClientDetail() : renderClients();
   if(state.tab === "orders") return renderOrders();
   if(state.tab === "catalogue") return renderCatalogue();
+  if(state.tab === "inventory") return renderInventory();
+  if(state.tab === "books") return renderBooks();
   if(state.tab === "account") return renderAccount();
   return "";
 }
 
 /* ================= DASHBOARD ================= */
 function renderDashboard(){
-  const orders = state.orders, clients = state.clients, business = state.business;
+  const orders = state.orders.filter(isRealOrder), clients = state.clients, business = state.business;
   const totalRevenue = orders.reduce((s,o)=>s+orderPaid(o),0);
   const outstanding = orders.filter(o=>o.status!=="Cancelled").reduce((s,o)=>s+(orderTotal(o)-orderPaid(o)),0);
   const activeOrders = orders.filter(o=>!["Delivered","Cancelled"].includes(o.status)).length;
@@ -1394,6 +1523,13 @@ function renderDashboard(){
         '<span class="pill" style="background:var(--rust-soft);color:var(--rust);">Review '+nounFor("catalogue")+'</span>'+
       '</div>'
     )+
+    (inventoryLowStockItems().length===0 ? '' :
+      '<div class="card" style="margin-bottom:16px;border-color:var(--rust);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;" data-action="open-inventory-filtered" data-filter="low">'+
+        '<div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--rust);">'+icon("box",16)+'</span>'+
+          '<span style="font-size:13px;">'+inventoryLowStockItems().length+' stock item'+(inventoryLowStockItems().length===1?'':'s')+' at or below reorder level — '+esc(inventoryLowStockItems().slice(0,3).map(i=>i.name).join(", "))+(inventoryLowStockItems().length>3?" +"+(inventoryLowStockItems().length-3)+" more":"")+'</span></div>'+
+        '<span class="pill" style="background:var(--rust-soft);color:var(--rust);">Review stock</span>'+
+      '</div>'
+    )+
     '<div style="margin-bottom:18px;"><div class="disp" style="font-size:21px;font-weight:600;">'+greeting()+'</div>'+
       '<div style="font-size:13px;color:var(--ink-soft);margin-top:2px;">Here\'s how the shop is doing today.</div></div>'+
     '<div class="grid-stats">'+
@@ -1401,6 +1537,8 @@ function renderDashboard(){
       statCard("Outstanding balance", money(outstanding, business.currency), "alert", "var(--rust)", "var(--rust-soft)", {action:"dash-kpi-outstanding"})+
       statCard("Active "+nounFor("recordPlural").toLowerCase(), activeOrders, "scissors", "var(--primary-text)", "rgba(var(--primary-text-rgb),0.08)", {action:"dash-kpi-active"})+
       statCard("Total "+nounFor("clientPlural").toLowerCase(), clients.length, "users", "#8A5F1F", "var(--gold-soft)", {action:"set-tab", tab:"clients"})+
+      (state.inventory.items.length>0 ? statCard("Stock value", money(inventoryStockValue(), business.currency), "box", "var(--green)", "var(--green-soft)", {action:"set-tab", tab:"inventory"}) : '')+
+      (state.expenses.length>0 ? statCard("Net profit (this month)", money(periodRevenue(booksPeriodRange("month"))-periodCOGS(booksPeriodRange("month"))-periodExpenses(booksPeriodRange("month")).reduce((s,e)=>s+Number(e.amount||0),0), business.currency), "ledger", "var(--primary-text)", "rgba(var(--primary-text-rgb),0.08)", {action:"set-tab", tab:"books"}) : '')+
     '</div>'+
     '<div class="grid-2-even">'+
       '<div class="card" style="min-width:0;"><div class="disp" style="font-weight:600;margin-bottom:10px;">Revenue, last 6 months</div>'+
@@ -1457,19 +1595,56 @@ function cardBaseFooterHtml(inkSoft, line){
     '<div style="font-size:9.5px;color:'+inkSoft+';margin-top:2px;">Generated '+fmtDateTime()+'</div>'+
   '</div>';
 }
+function signatureBlockHtml(business, ink, inkSoft, line, kind){
+  const sig = business.signature;
+  if(!sig) return "";
+  const enabled = kind==="receipt" ? sig.showOnReceipt!==false : sig.showOnInvoice!==false;
+  if(!enabled) return "";
+  let mark = "";
+  if((sig.mode||"draw")==="typed" && sig.text && sig.text.trim()){
+    mark = '<div style="font-family:\''+esc(sig.font||"Dancing Script")+'\',cursive;font-size:30px;color:'+ink+';">'+esc(sig.text)+'</div>';
+  } else if(sig.image){
+    mark = '<img src="'+sig.image+'" style="max-height:52px;max-width:180px;object-fit:contain;">';
+  }
+  if(!mark) return "";
+  return '<div style="margin-top:20px;text-align:right;">'+
+    mark+
+    '<div style="border-top:1px solid '+line+';margin-top:4px;padding-top:4px;font-size:10.5px;color:'+inkSoft+';display:inline-block;min-width:140px;">Authorized signature</div>'+
+  '</div>';
+}
 function buildInvoiceCardHtml(order, client, business, kind){
-  const total = orderTotal(order), paid = orderPaid(order), bal = total-paid;
+  const isQuote = kind==="quote";
+  const sub = orderSubtotal(order), discount = orderDiscountAmount(order), taxable = orderTaxableAmount(order),
+    tax = orderTaxAmount(order), total = orderTotal(order), paid = orderPaid(order), bal = total-paid;
+  const hasBreakdown = discount>0 || tax>0;
   const primary=themeColor("primary"), gold=themeColor("gold"), green=themeColor("green"), rust=themeColor("rust");
   const ink=CARD_INK, inkSoft=CARD_INK_SOFT, line=CARD_LINE, surface=CARD_SURFACE;
+  const docNo = ensureDocNumber(order, isQuote?"quote":kind);
   const rows = (order.items||[]).map(it=>
     '<tr><td style="padding:7px 0;border-bottom:1px solid '+line+';font-size:13px;color:'+ink+';">'+esc(it.desc||"Item")+'</td>'+
     '<td style="padding:7px 0;border-bottom:1px solid '+line+';font-size:13px;color:'+ink+';text-align:right;white-space:nowrap;">'+money(it.price,business.currency)+'</td></tr>'
   ).join("");
-  const bankHtml = (bal>0 && business.bankAccounts && business.bankAccounts.length>0) ?
+  const bankHtml = (!isQuote && bal>0 && business.bankAccounts && business.bankAccounts.length>0) ?
     '<div style="margin-top:16px;padding:12px 14px;background:'+surface+';border-radius:10px;border:1px solid '+line+';">'+
       '<div style="font-size:11px;font-weight:600;color:'+inkSoft+';text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">'+(business.bankAccounts.length>1?"Pay into any of":"Pay into")+'</div>'+
       business.bankAccounts.map(acc=>'<div style="font-size:12.5px;color:'+ink+';margin-bottom:4px;">'+esc(acc.accountName)+' · '+esc(acc.bankName)+' · '+esc(acc.accountNumber)+'</div>').join("")+
     '</div>' : '';
+  const breakdownHtml = hasBreakdown ?
+      '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:'+inkSoft+';margin-bottom:4px;"><span>Subtotal</span><span>'+money(sub,business.currency)+'</span></div>'+
+      (discount>0 ? '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:'+inkSoft+';margin-bottom:4px;"><span>Discount</span><span>-'+money(discount,business.currency)+'</span></div>' : '')+
+      (tax>0 ? '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:'+inkSoft+';margin-bottom:4px;"><span>Tax ('+Number(order.taxPercent||0)+'%)</span><span>'+money(tax,business.currency)+'</span></div>' : '')
+    : '';
+  const totalsHtml = isQuote ?
+    ('<div style="border-top:2px solid '+ink+';padding-top:10px;">'+
+      breakdownHtml+
+      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:'+primary+';"><span>Total estimate</span><span>'+money(total,business.currency)+'</span></div>'+
+    '</div>')
+    : ('<div style="border-top:2px solid '+ink+';padding-top:10px;">'+
+      breakdownHtml+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:'+inkSoft+';margin-bottom:4px;"><span>Total</span><span>'+money(total,business.currency)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;color:'+inkSoft+';margin-bottom:4px;"><span>Paid</span><span>'+money(paid,business.currency)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:'+(bal>0?rust:green)+';"><span>Balance</span><span>'+money(bal,business.currency)+'</span></div>'+
+    '</div>');
   return '<div style="width:480px;padding:32px;background:#ffffff;font-family:Georgia,serif;box-sizing:border-box;">'+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;">'+
       '<div style="display:flex;align-items:center;gap:12px;min-width:0;">'+cardLogoHtml(business,52)+
@@ -1482,22 +1657,19 @@ function buildInvoiceCardHtml(order, client, business, kind){
     '</div>'+
     '<div style="height:3px;background:'+gold+';border-radius:2px;margin-bottom:16px;"></div>'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'+
-      '<div><div style="font-size:20px;font-weight:700;letter-spacing:.06em;color:'+primary+';">'+(kind==="receipt"?"RECEIPT":"INVOICE")+'</div>'+
-      '<div style="font-size:12px;color:'+inkSoft+';margin-top:2px;">'+fmtDate(todayISO())+'</div></div>'+
-      '<div style="text-align:right;"><div style="font-size:11px;color:'+inkSoft+';">Billed to</div>'+
+      '<div><div style="font-size:20px;font-weight:700;letter-spacing:.06em;color:'+primary+';">'+(kind==="receipt"?"RECEIPT":isQuote?"ESTIMATE":"INVOICE")+'</div>'+
+      '<div style="font-size:12px;color:'+inkSoft+';margin-top:2px;">'+esc(docNo)+' · '+fmtDate(todayISO())+'</div></div>'+
+      '<div style="text-align:right;"><div style="font-size:11px;color:'+inkSoft+';">'+(isQuote?"Prepared for":"Billed to")+'</div>'+
       '<div style="font-size:14px;font-weight:600;color:'+ink+';">'+esc(client?client.name:"—")+'</div>'+
       '</div>'+
     '</div>'+
     '<div style="font-size:12.5px;color:'+inkSoft+';margin-bottom:10px;">'+esc(order.title||"Untitled order")+'</div>'+
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">'+rows+'</table>'+
-    '<div style="border-top:2px solid '+ink+';padding-top:10px;">'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;color:'+inkSoft+';margin-bottom:4px;"><span>Total</span><span>'+money(total,business.currency)+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:13px;color:'+inkSoft+';margin-bottom:4px;"><span>Paid</span><span>'+money(paid,business.currency)+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:'+(bal>0?rust:green)+';"><span>Balance</span><span>'+money(bal,business.currency)+'</span></div>'+
-    '</div>'+
-    (order.dueDate?'<div style="font-size:12px;color:'+inkSoft+';margin-top:8px;">Due date: '+fmtDate(order.dueDate)+'</div>':'')+
+    totalsHtml+
+    (order.dueDate?'<div style="font-size:12px;color:'+inkSoft+';margin-top:8px;">'+(isQuote?"Valid until: ":"Due date: ")+fmtDate(order.dueDate)+'</div>':'')+
     bankHtml+
-    '<div style="margin-top:22px;text-align:center;font-size:12px;color:'+inkSoft+';font-style:italic;">Thank you for your patronage!</div>'+
+    '<div style="margin-top:22px;text-align:center;font-size:12px;color:'+inkSoft+';font-style:italic;">'+(isQuote?"This is an estimate — prices may change until confirmed.":"Thank you for your patronage!")+'</div>'+
+    signatureBlockHtml(business, ink, inkSoft, line, kind)+
     cardBaseFooterHtml(inkSoft, line)+
   '</div>';
 }
@@ -1555,6 +1727,7 @@ async function cardToFile(html, filenameBase, widthPx){
   holder.innerHTML = html;
   document.body.appendChild(holder);
   try{
+    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
     const canvas = await html2canvas(holder, {backgroundColor:"#ffffff", scale:2});
     const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
     return new File([blob], filenameBase+".png", {type:"image/png"});
@@ -1583,10 +1756,10 @@ async function shareImageFile(file, caption, phone){
 async function shareInvoiceImage(order, client, kind, mode){
   const business = state.business;
   const html = buildInvoiceCardHtml(order, client, business, kind);
-  const base = (kind==="receipt"?"receipt-":"invoice-")+(client?client.name.replace(/[^a-z0-9]+/gi,"-").toLowerCase():"client");
+  const base = (kind==="receipt"?"receipt-":kind==="quote"?"estimate-":"invoice-")+(client?client.name.replace(/[^a-z0-9]+/gi,"-").toLowerCase():"client");
   const file = await cardToFile(html, base, 480);
   if(mode==="download"){ downloadFile(file); return; }
-  const caption = (kind==="receipt"?"Receipt":"Invoice")+" from "+(business.name||"")+(order.title?(" — "+order.title):"");
+  const caption = (kind==="receipt"?"Receipt":kind==="quote"?"Estimate":"Invoice")+" from "+(business.name||"")+(order.title?(" — "+order.title):"");
   await shareImageFile(file, caption, client?client.phone:"");
 }
 async function shareReminderImage(order, client, bal, mode){
@@ -1617,7 +1790,7 @@ function statCard(label, value, iconName, tone, bg, opts){
   '</div>';
 }
 function renderDashboardCharts(){
-  const orders = state.orders, business = state.business;
+  const orders = state.orders.filter(isRealOrder), business = state.business;
   const revBy = {}; orders.forEach(o=> (o.payments||[]).forEach(p=>{
     const d = new Date(p.date+"T00:00:00"); const key = d.toLocaleDateString(undefined,{month:"short"});
     revBy[key] = (revBy[key]||0) + Number(p.amount||0);
@@ -1678,7 +1851,7 @@ function renderClients(){
 }
 function clientCardsHtml(filtered){
   return (filtered.length===0 ? '<div class="empty">No clients found.</div>' : filtered.map(c => {
-    const orderCount = state.orders.filter(o=>o.clientId===c.id).length;
+    const orderCount = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o)).length;
     return '<div class="card" style="cursor:pointer;" data-action="select-client" data-id="'+c.id+'">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
         '<div><div class="disp" style="font-weight:600;font-size:15.5px;">'+esc(c.name)+'</div>'+
@@ -1697,7 +1870,7 @@ function clientCardsHtml(filtered){
 function renderClientDetail(){
   const client = state.clients.find(c=>c.id===state.selectedClientId);
   if(!client) { state.selectedClientId=null; return renderClients(); }
-  const clientOrders = state.orders.filter(o=>o.clientId===client.id);
+  const clientOrders = state.orders.filter(o=>o.clientId===client.id && isRealOrder(o));
   const business = state.business;
   return (
     '<button class="btn ghost sm" data-action="back-to-clients" style="margin-bottom:14px;">'+icon("back",14)+' Back to clients</button>'+
@@ -1750,31 +1923,39 @@ function renderClientDetail(){
 
 /* ================= ORDERS ================= */
 function renderOrders(){
+  const kindView = state.orderKind || "order";
   const filter = state.orderFilterStatus || "All";
   const bulkMode = !!state.orderBulkMode;
   const bulkSel = state.orderBulkSelected || [];
   const sorted = filteredSortedOrders();
+  const statuses = statusesFor(kindView);
+  const recLabel = kindView==="quote" ? "quote" : nounFor("record").toLowerCase();
+  const recLabelPl = kindView==="quote" ? "quotes" : nounFor("recordPlural").toLowerCase();
 
   return (
     '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">'+
+      '<div class="chipbar" style="margin-bottom:2px;">'+
+        '<button class="btn '+(kindView==="order"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="order">'+icon("bag",13)+' '+esc(nounFor("recordPlural"))+'</button>'+
+        '<button class="btn '+(kindView==="quote"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="quote">'+icon("edit",13)+' Quotes / estimates</button>'+
+      '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'+
         '<div style="position:relative;flex:1;min-width:160px;max-width:320px;">'+
           '<span style="position:absolute;left:10px;top:11px;color:var(--ink-soft);">'+icon("search",14)+'</span>'+
-          '<input style="padding-left:30px;" placeholder="Search '+nounFor("recordPlural").toLowerCase()+'..." data-action="search-orders" value="'+esc(state.orderSearch||"")+'">'+
+          '<input style="padding-left:30px;" placeholder="Search '+recLabelPl+'..." data-action="search-orders" value="'+esc(state.orderSearch||"")+'">'+
         '</div>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
           '<button class="btn '+(bulkMode?'gold':'ghost')+' sm" data-action="toggle-order-bulk">'+icon("check",13)+' '+(bulkMode?"Cancel select":"Select")+'</button>'+
-          '<button class="btn" data-action="open-order-modal-new"><span>'+icon("plus",15)+'</span> New '+nounFor("record").toLowerCase()+'</button>'+
+          '<button class="btn" data-action="open-order-modal-new" data-kind="'+kindView+'"><span>'+icon("plus",15)+'</span> New '+recLabel+'</button>'+
         '</div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;align-items:center;">'+
-        '<div class="chipbar scroll" style="flex:1;min-width:0;">'+ ["All"].concat(currentStatuses().map(s=>s.key)).map(s=>
+        '<div class="chipbar scroll" style="flex:1;min-width:0;">'+ ["All"].concat(statuses.map(s=>s.key)).map(s=>
           '<button class="btn '+(filter===s?'gold':'ghost')+' sm" data-action="filter-orders" data-status="'+s+'">'+s+'</button>'
         ).join("") +'</div>'+
-        '<button class="btn '+(state.orderBalanceOnly?'gold':'ghost')+' sm" style="flex-shrink:0;" data-action="toggle-balance-filter">'+icon("cash",13)+' Balance due</button>'+
+        (kindView==="order" ? '<button class="btn '+(state.orderBalanceOnly?'gold':'ghost')+' sm" style="flex-shrink:0;" data-action="toggle-balance-filter">'+icon("cash",13)+' Balance due</button>' : '')+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--ink-soft);">'+
-        '<span>Due date range:</span>'+
+        '<span>'+(kindView==="quote"?"Valid-until range:":"Due date range:")+'</span>'+
         '<input type="date" style="width:auto;padding:6px 8px;" data-action="set-order-date-from" value="'+esc(state.orderDateFrom||"")+'">'+
         '<span>to</span>'+
         '<input type="date" style="width:auto;padding:6px 8px;" data-action="set-order-date-to" value="'+esc(state.orderDateTo||"")+'">'+
@@ -1783,17 +1964,19 @@ function renderOrders(){
       (bulkMode && bulkSel.length>0 ?
         '<div class="card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:var(--gold-soft);">'+
           '<span style="font-size:12.5px;font-weight:600;">'+bulkSel.length+' selected</span>'+
-          '<div class="chipbar">'+ currentStatuses().map(s=>'<button class="btn ghost sm" data-action="bulk-set-status" data-status="'+s.key+'">Set '+s.key+'</button>').join("") +'</div>'+
+          '<div class="chipbar">'+ statuses.map(s=>'<button class="btn ghost sm" data-action="bulk-set-status" data-status="'+s.key+'">Set '+s.key+'</button>').join("") +'</div>'+
         '</div>' : '')+
     '</div>'+
     '<div id="ordersListWrap">'+ orderCardsHtml(sorted) +'</div>'
   );
 }
 function filteredSortedOrders(){
+  const kindView = state.orderKind || "order";
   const filter = state.orderFilterStatus || "All";
   const q = (state.orderSearch||"").toLowerCase();
-  let filtered = filter==="All" ? state.orders : state.orders.filter(o=>o.status===filter);
-  if(state.orderBalanceOnly) filtered = filtered.filter(o=>(orderTotal(o)-orderPaid(o))>0 && o.status!=="Cancelled");
+  let filtered = state.orders.filter(o => recordKind(o)===kindView);
+  if(filter!=="All") filtered = filtered.filter(o=>o.status===filter);
+  if(kindView==="order" && state.orderBalanceOnly) filtered = filtered.filter(o=>(orderTotal(o)-orderPaid(o))>0 && o.status!=="Cancelled");
   if(state.orderDateFrom) filtered = filtered.filter(o=> o.dueDate && o.dueDate >= state.orderDateFrom);
   if(state.orderDateTo) filtered = filtered.filter(o=> o.dueDate && o.dueDate <= state.orderDateTo);
   if(q){
@@ -1808,18 +1991,23 @@ function orderCardsHtml(sorted){
   const business = state.business;
   const bulkMode = !!state.orderBulkMode;
   const bulkSel = state.orderBulkSelected || [];
+  const kindView = state.orderKind || "order";
+  const totalOfKind = state.orders.filter(o=>recordKind(o)===kindView).length;
+  const recLabel = kindView==="quote" ? "quote" : nounFor("record").toLowerCase();
+  const recLabelPl = kindView==="quote" ? "quotes" : nounFor("recordPlural").toLowerCase();
   return '<div style="display:flex;flex-direction:column;gap:10px;">'+
       (sorted.length===0 ? (
-        state.orders.length===0 ?
+        totalOfKind===0 ?
           '<div class="empty" style="display:flex;flex-direction:column;gap:10px;align-items:center;padding:28px 16px;">'+
-            '<div>No '+nounFor("recordPlural").toLowerCase()+' yet — create your first one to start tracking work and payments.</div>'+
-            '<button class="btn gold sm" data-action="open-order-modal-new">'+icon("plus",13)+' New '+nounFor("record").toLowerCase()+'</button>'+
+            '<div>No '+recLabelPl+' yet'+(kindView==="quote"?" — send a client an estimate before starting the work.":" — create your first one to start tracking work and payments.")+'</div>'+
+            '<button class="btn gold sm" data-action="open-order-modal-new" data-kind="'+kindView+'">'+icon("plus",13)+' New '+recLabel+'</button>'+
           '</div>' :
-          '<div class="empty">No '+nounFor("recordPlural").toLowerCase()+' match this view. Try clearing the search or filters.</div>'
+          '<div class="empty">No '+recLabelPl+' match this view. Try clearing the search or filters.</div>'
       ) : sorted.map(o=>{
         const client = state.clients.find(c=>c.id===o.clientId);
         const total=orderTotal(o), paid=orderPaid(o), bal=total-paid, dleft=daysUntil(o.dueDate);
-        const info = statusInfo(o.status);
+        const isQuote = recordKind(o)==="quote";
+        const info = statusInfo2(o.status, o);
         const checked = bulkSel.includes(o.id);
         return '<div class="card" style="cursor:pointer;display:flex;gap:10px;" '+(bulkMode?'data-action="toggle-order-select" data-id="'+o.id+'"':'data-action="open-order-modal" data-id="'+o.id+'"')+'>'+
           (bulkMode ? '<div style="flex-shrink:0;padding-top:2px;"><input type="checkbox" '+(checked?"checked":"")+' style="width:18px;height:18px;pointer-events:none;"></div>' : '')+
@@ -1827,16 +2015,22 @@ function orderCardsHtml(sorted){
           '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
             '<div><div style="font-weight:500;">'+esc(client?client.name:"Unknown client")+' — '+esc(o.title||"Untitled order")+'</div>'+
               '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;display:flex;gap:12px;flex-wrap:wrap;">'+
-                '<span>Total '+money(total,business.currency)+'</span>'+
-                '<span style="color:'+(bal>0?'var(--rust)':'var(--green)')+';">Balance '+money(bal,business.currency)+'</span>'+
-                (o.dueDate?('<span>'+(dleft<0?(Math.abs(dleft)+"d overdue"):("Due "+fmtDate(o.dueDate)))+'</span>'):'')+
+                (isQuote ? '<span>Estimate '+money(total,business.currency)+'</span>' :
+                  ('<span>Total '+money(total,business.currency)+'</span>'+
+                  '<span style="color:'+(bal>0?'var(--rust)':'var(--green)')+';">Balance '+money(bal,business.currency)+'</span>'))+
+                (o.dueDate?('<span>'+(isQuote?"Valid until "+fmtDate(o.dueDate):(dleft<0?(Math.abs(dleft)+"d overdue"):("Due "+fmtDate(o.dueDate))))+'</span>'):'')+
               '</div></div>'+
             '<span class="pill '+statusClass(o.status)+'">'+o.status+'</span></div>'+
-          '<div style="margin-top:10px;"><div class="tape-track '+(o.status==="Cancelled"?"cancelled":"")+'"><div class="fill" style="width:'+info.pct+'%;"></div></div>'+
-            '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>'+
+          (isQuote ? '' :
+            '<div style="margin-top:10px;"><div class="tape-track '+(o.status==="Cancelled"?"cancelled":"")+'"><div class="fill" style="width:'+info.pct+'%;"></div></div>'+
+            '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>')+
           '</div></div>';
       }).join(""))+
     '</div>';
+}
+function statusInfo2(s, o){
+  const list = statusesFor(recordKind(o||{}));
+  return list.find(x=>x.key===s) || list[0];
 }
 
 /* ================= CATALOGUE ================= */
@@ -1910,7 +2104,7 @@ function catalogueResultsHtml(){
   if(catQ) items = items.filter(it => it.name.toLowerCase().includes(catQ) || (it.description||"").toLowerCase().includes(catQ));
 
   const salesCount = {};
-  state.orders.forEach(o=>{ if(o.status==="Cancelled") return; (o.items||[]).forEach(li=>{ if(li.desc) salesCount[li.desc] = (salesCount[li.desc]||0)+1; }); });
+  state.orders.forEach(o=>{ if(o.status==="Cancelled" || isQuoteRecord(o)) return; (o.items||[]).forEach(li=>{ if(li.desc) salesCount[li.desc] = (salesCount[li.desc]||0)+1; }); });
   const bestSellers = state.catalogue.items.slice()
     .map(it=>({it, count: salesCount[it.name]||0}))
     .filter(x=>x.count>0).sort((a,b)=>b.count-a.count).slice(0,5);
@@ -2023,6 +2217,641 @@ function buildCatalogueShareText(){
   return lines.join("\n");
 }
 
+/* ================= INVENTORY / STOCK ================= */
+function findInvItem(id){ return state.inventory.items.find(i=>i.id===id); }
+function inventoryStockValue(){
+  return state.inventory.items.reduce((s,it)=> s + (Number(it.costPrice||it.sellPrice||0) * (Number(it.qtyOnHand)||0)), 0);
+}
+function inventoryLowStockItems(){
+  return state.inventory.items.filter(it => Number(it.qtyOnHand) <= Number(it.reorderLevel||0));
+}
+
+function renderInventory(){
+  const view = state.inventoryView || "items";
+  return (
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;">'+
+      '<div class="chipbar">'+
+        '<button class="btn '+(view==="items"?"gold":"ghost")+' sm" data-action="select-inventory-view" data-view="items">'+icon("box",14)+' Items</button>'+
+        '<button class="btn '+(view==="reports"?"gold":"ghost")+' sm" data-action="select-inventory-view" data-view="reports">'+icon("dashboard",14)+' Reports</button>'+
+      '</div>'+
+      '<button class="btn gold sm" data-action="open-inv-modal-new">'+icon("plus",13)+' Add item</button>'+
+    '</div>'+
+    (view==="reports" ? renderInventoryReports() : renderInventoryItemsView())
+  );
+}
+function renderInventoryItemsView(){
+  const labels = {all:"All", low:"Low stock", out:"Out of stock"};
+  return (
+    '<div style="position:relative;margin-bottom:12px;max-width:320px;">'+
+      '<span style="position:absolute;left:10px;top:11px;color:var(--ink-soft);">'+icon("search",14)+'</span>'+
+      '<input id="inventorySearchInput" style="padding-left:30px;" placeholder="Search stock items..." data-action="search-inventory" value="'+esc(state.inventorySearch||"")+'">'+
+    '</div>'+
+    '<div class="chipbar" style="margin-bottom:14px;">'+
+      Object.keys(labels).map(f=>
+        '<button class="btn '+(state.inventoryFilter===f?"gold":"ghost")+' sm" data-action="select-inventory-filter" data-filter="'+f+'">'+labels[f]+'</button>'
+      ).join("")+
+    '</div>'+
+    '<div id="inventoryItemsWrap">'+ inventoryItemsHtml() +'</div>'
+  );
+}
+function inventoryFilteredItems(){
+  let items = state.inventory.items.slice();
+  const q = (state.inventorySearch||"").toLowerCase();
+  if(q) items = items.filter(it => it.name.toLowerCase().includes(q) || (it.sku||"").toLowerCase().includes(q));
+  const filter = state.inventoryFilter||"all";
+  if(filter==="low") items = items.filter(it => Number(it.qtyOnHand)>0 && Number(it.qtyOnHand) <= Number(it.reorderLevel||0));
+  if(filter==="out") items = items.filter(it => Number(it.qtyOnHand) <= 0);
+  return items.sort((a,b)=> a.name.localeCompare(b.name));
+}
+function inventoryItemsHtml(){
+  const business = state.business;
+  const items = inventoryFilteredItems();
+  if(state.inventory.items.length===0){
+    return '<div class="empty" style="display:flex;flex-direction:column;gap:10px;align-items:center;padding:28px 16px;">'+
+      '<div>No stock items yet — add your first product to start tracking quantities.</div>'+
+      '<button class="btn gold sm" data-action="open-inv-modal-new">'+icon("plus",13)+' Add item</button>'+
+    '</div>';
+  }
+  if(items.length===0) return '<div class="empty">No items match this view.</div>';
+  return '<div style="display:flex;flex-direction:column;gap:10px;">'+
+    items.map(it=>{
+      const qty = Number(it.qtyOnHand)||0;
+      const reorder = Number(it.reorderLevel)||0;
+      const out = qty<=0;
+      const low = !out && qty<=reorder;
+      const tone = out ? "var(--rust)" : (low ? "var(--gold)" : "var(--green)");
+      const toneBg = out ? "var(--rust-soft)" : (low ? "var(--gold-soft)" : "var(--green-soft)");
+      const statusLabel = out ? "Out of stock" : (low ? "Low stock" : "In stock");
+      return '<div class="card" style="cursor:pointer;" data-action="open-inv-modal" data-id="'+it.id+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">'+
+          '<div style="min-width:0;">'+
+            '<div style="font-weight:600;font-size:14px;">'+esc(it.name)+'</div>'+
+            (it.sku ? '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">SKU: '+esc(it.sku)+'</div>' : '')+
+            '<div style="font-size:12px;color:var(--ink-soft);margin-top:4px;display:flex;gap:12px;flex-wrap:wrap;">'+
+              '<span>Sell '+money(it.sellPrice||0,business.currency)+'</span>'+
+              (it.costPrice ? '<span>Cost '+money(it.costPrice,business.currency)+'</span>' : '')+
+            '</div>'+
+          '</div>'+
+          '<span class="pill" style="background:'+toneBg+';color:'+tone+';white-space:nowrap;">'+qty+' '+esc(it.unit||"pcs")+' · '+statusLabel+'</span>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;margin-top:10px;">'+
+          '<button class="btn ghost sm" data-action="open-stockmove-modal" data-id="'+it.id+'" data-type="restock">'+icon("arrowUp",13)+' Restock</button>'+
+          '<button class="btn ghost sm" data-action="open-stockmove-modal" data-id="'+it.id+'" data-type="sale">'+icon("arrowDown",13)+' Sale</button>'+
+          '<button class="iconbtn" data-action="delete-inv-item" data-id="'+it.id+'" title="Delete item" aria-label="Delete item" style="margin-left:auto;">'+icon("trash",14)+'</button>'+
+        '</div>'+
+      '</div>';
+    }).join("")+
+  '</div>';
+}
+const STOCK_MOVE_TYPE_LABELS = {restock:"Restock",sale:"Sale",waste:"Waste/damage",adjustment:"Correction"};
+function renderInventoryReports(){
+  const business = state.business;
+  const items = state.inventory.items;
+  const totalItems = items.length;
+  const totalValue = items.reduce((s,it)=> s + (Number(it.costPrice||it.sellPrice||0) * (Number(it.qtyOnHand)||0)), 0);
+  const lowItems = items.filter(it => Number(it.qtyOnHand)>0 && Number(it.qtyOnHand)<=Number(it.reorderLevel||0));
+  const outItems = items.filter(it => Number(it.qtyOnHand)<=0);
+  const movements = (state.inventory.movements||[]).slice(0,20);
+  const topByValue = items.slice().map(it=>({it, value:(Number(it.costPrice||it.sellPrice||0)*(Number(it.qtyOnHand)||0))}))
+    .filter(x=>x.value>0).sort((a,b)=>b.value-a.value).slice(0,5);
+
+  return (
+    '<div class="grid-stats" style="margin-bottom:16px;">'+
+      statCard("Stock value", money(totalValue,business.currency), "cash", "var(--green)", "var(--green-soft)")+
+      statCard("Total items", totalItems, "box", "var(--primary-text)", "rgba(var(--primary-text-rgb),0.08)")+
+      statCard("Low stock", lowItems.length, "alert", "#8A5F1F", "var(--gold-soft)", {action:"open-inventory-filtered", filter:"low"})+
+      statCard("Out of stock", outItems.length, "alert", "var(--rust)", "var(--rust-soft)", {action:"open-inventory-filtered", filter:"out"})+
+    '</div>'+
+    (topByValue.length===0 ? '' :
+      '<div class="card" style="margin-bottom:16px;"><div class="disp" style="font-weight:600;margin-bottom:10px;">Top items by stock value</div>'+
+        topByValue.map(({it,value})=> '<div class="rowline"><span>'+esc(it.name)+'</span><span class="mono" style="font-weight:500;">'+money(value,business.currency)+'</span></div>').join("")+
+      '</div>'
+    )+
+    '<div class="card">'+
+      '<div class="disp" style="font-weight:600;margin-bottom:10px;">Recent stock movements</div>'+
+      (movements.length===0 ? '<div class="empty">No stock movements recorded yet.</div>' :
+        movements.map(mv=>{
+          const it = state.inventory.items.find(x=>x.id===mv.itemId);
+          const inMove = Number(mv.qty)>=0;
+          const typeLabel = STOCK_MOVE_TYPE_LABELS[mv.type] || mv.type;
+          return '<div class="rowline"><div>'+
+              '<div style="font-weight:500;font-size:13px;">'+esc(it?it.name:"Deleted item")+'</div>'+
+              '<div style="font-size:11.5px;color:var(--ink-soft);">'+esc(typeLabel)+(mv.note?(" · "+esc(mv.note)):"")+' · '+fmtDate((mv.date||"").slice(0,10))+'</div>'+
+            '</div>'+
+            '<span style="font-weight:600;color:'+(inMove?"var(--green)":"var(--rust)")+';">'+(inMove?"+":"")+mv.qty+'</span>'+
+          '</div>';
+        }).join("")
+      )+
+    '</div>'
+  );
+}
+function openInvItemModal(existing){
+  state.modal = { type:"invitem", isNew: !existing,
+    draft: existing ? JSON.parse(JSON.stringify(existing)) : {
+      id:uid(), name:"", sku:"", unit:"pcs", qtyOnHand:0, reorderLevel:5, costPrice:"", sellPrice:"", notes:"", createdAt:new Date().toISOString()
+    }};
+  pushNav();
+  render();
+}
+function openStockMoveModal(itemId, presetType){
+  state.modal = { type:"stockmove", itemId, form: { type:presetType||"restock", qty:"", note:"" } };
+  pushNav();
+  render();
+}
+function applyStockMovement(item, type, qtyRaw, note){
+  const qty = Number(qtyRaw)||0;
+  let delta;
+  if(type==="restock") delta = Math.abs(qty);
+  else if(type==="sale" || type==="waste") delta = -Math.abs(qty);
+  else delta = qty; // adjustment: signed value as entered
+  item.qtyOnHand = Math.max(0, (Number(item.qtyOnHand)||0) + delta);
+  item.updatedAt = new Date().toISOString();
+  state.inventory.movements.unshift({ id:uid(), itemId:item.id, type, qty:delta, note:(note||"").trim(), date:new Date().toISOString() });
+  if(state.inventory.movements.length>500) state.inventory.movements.length = 500;
+}
+function renderInvItemModal(){
+  const it = state.modal.draft;
+  const isNew = state.modal.isNew;
+  const history = isNew ? [] : (state.inventory.movements||[]).filter(m=>m.itemId===it.id).slice(0,8);
+  return modalShell(isNew ? "Add stock item" : "Edit stock item",
+    '<div style="display:flex;flex-direction:column;gap:12px;">'+
+      '<div><label>Item name</label><input type="text" data-bind="modal.draft.name" value="'+esc(it.name)+'" placeholder="e.g. Ankara maxi dress"></div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;"><label>SKU / code</label><input type="text" data-bind="modal.draft.sku" value="'+esc(it.sku||"")+'" placeholder="SKU-0012"></div>'+
+        '<div style="width:100px;"><label>Unit</label><input type="text" data-bind="modal.draft.unit" value="'+esc(it.unit||"pcs")+'" placeholder="pcs"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;"><label>Quantity on hand</label><input class="mono" type="number" data-bind="modal.draft.qtyOnHand" value="'+esc(it.qtyOnHand)+'"></div>'+
+        '<div style="flex:1;"><label>Reorder level</label><input class="mono" type="number" data-bind="modal.draft.reorderLevel" value="'+esc(it.reorderLevel)+'"></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;"><label>Cost price</label><input class="mono" type="number" data-bind="modal.draft.costPrice" value="'+esc(it.costPrice)+'"></div>'+
+        '<div style="flex:1;"><label>Sell price</label><input class="mono" type="number" data-bind="modal.draft.sellPrice" value="'+esc(it.sellPrice)+'"></div>'+
+      '</div>'+
+      '<div><label>Notes</label><textarea data-bind="modal.draft.notes" rows="2" placeholder="Optional">'+esc(it.notes||"")+'</textarea></div>'+
+      (history.length>0 ?
+        '<div><label>Recent activity</label>'+
+          history.map(mv=>{
+            const typeLabel = STOCK_MOVE_TYPE_LABELS[mv.type] || mv.type;
+            return '<div class="rowline" style="padding:6px 0;"><span style="font-size:12px;color:var(--ink-soft);">'+esc(typeLabel)+(mv.note?(" · "+esc(mv.note)):"")+' · '+fmtDate((mv.date||"").slice(0,10))+'</span>'+
+              '<span style="font-weight:600;font-size:12px;color:'+(Number(mv.qty)>=0?"var(--green)":"var(--rust)")+';">'+(Number(mv.qty)>=0?"+":"")+mv.qty+'</span></div>';
+          }).join("")+
+        '</div>' : ''
+      )+
+      '<div style="display:flex;gap:10px;margin-top:6px;">'+
+        (isNew ? '' : '<button class="btn ghost sm" data-action="delete-inv-item" data-id="'+it.id+'" style="color:var(--rust);">'+icon("trash",13)+' Delete</button>')+
+        '<button id="modalSaveBtn" class="btn gold" style="flex:1;" data-action="save-inv-item" '+(it.name.trim()?'':'disabled')+'>Save item</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+function renderStockMoveModal(){
+  const item = findInvItem(state.modal.itemId);
+  if(!item) return modalShell("Stock movement", '<div class="empty">Item not found.</div>');
+  const form = state.modal.form;
+  return modalShell("Update stock — "+item.name,
+    '<div style="display:flex;flex-direction:column;gap:12px;">'+
+      '<div style="font-size:12.5px;color:var(--ink-soft);">Current quantity: <strong style="color:var(--ink);">'+(Number(item.qtyOnHand)||0)+' '+esc(item.unit||"pcs")+'</strong></div>'+
+      '<div><label>Movement type</label><select data-bind="modal.form.type" data-rerender="1">'+
+        Object.keys(STOCK_MOVE_TYPE_LABELS).map(k=>'<option value="'+k+'" '+(form.type===k?'selected':'')+'>'+
+          (k==="adjustment" ? "Correction (+/-)" : STOCK_MOVE_TYPE_LABELS[k]+(k==="restock"?" (stock in)":" (stock out)"))+
+        '</option>').join("")+
+      '</select></div>'+
+      '<div><label>'+(form.type==="adjustment" ? "Change amount (+/-)" : "Quantity")+'</label>'+
+        '<input class="mono" type="number" data-bind="modal.form.qty" value="'+esc(form.qty)+'" placeholder="0"></div>'+
+      '<div><label>Note (optional)</label><input type="text" data-bind="modal.form.note" value="'+esc(form.note||"")+'" placeholder="e.g. Supplier delivery, damaged in transit..."></div>'+
+      '<button class="btn gold" data-action="save-stockmove">Save</button>'+
+    '</div>'
+  );
+}
+
+/* ================= BOOKS (VENDORS / EXPENSES / P&L) ================= */
+const EXPENSE_CATEGORIES = ["Rent","Utilities","Supplies","Salaries & wages","Transport","Marketing","Repairs & maintenance","Fees & charges","Other"];
+function findVendor(id){ return state.vendors.find(v=>v.id===id); }
+function findExpense(id){ return state.expenses.find(e=>e.id===id); }
+function booksPeriodRange(period){
+  const now = new Date();
+  if(period==="all") return null;
+  if(period==="lastmonth"){
+    const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const from = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01";
+    const toD = new Date(d.getFullYear(), d.getMonth()+1, 0);
+    return { from, to: toD.toISOString().slice(0,10) };
+  }
+  const from = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-01";
+  const toD = new Date(now.getFullYear(), now.getMonth()+1, 0);
+  return { from, to: toD.toISOString().slice(0,10) };
+}
+function inBooksPeriod(dateStr, range){
+  if(!range) return true;
+  if(!dateStr) return false;
+  return dateStr >= range.from && dateStr <= range.to;
+}
+function periodRevenue(range){
+  let sum = 0;
+  state.orders.forEach(o=>{ if(isQuoteRecord(o)) return; (o.payments||[]).forEach(p=>{ if(inBooksPeriod(p.date, range)) sum += Number(p.amount)||0; }); });
+  return sum;
+}
+function periodCOGS(range){
+  let sum = 0;
+  (state.inventory.movements||[]).forEach(mv=>{
+    if(mv.type!=="sale") return;
+    if(!inBooksPeriod((mv.date||"").slice(0,10), range)) return;
+    const item = findInvItem(mv.itemId);
+    sum += Math.abs(Number(mv.qty)||0) * (item ? Number(item.costPrice||0) : 0);
+  });
+  return sum;
+}
+function periodExpenses(range){ return state.expenses.filter(e=>inBooksPeriod(e.date, range)); }
+
+function renderBooks(){
+  const view = state.booksView || "expenses";
+  return (
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;">'+
+      '<div class="chipbar">'+
+        '<button class="btn '+(view==="expenses"?"gold":"ghost")+' sm" data-action="select-books-view" data-view="expenses">'+icon("cash",14)+' Expenses</button>'+
+        '<button class="btn '+(view==="vendors"?"gold":"ghost")+' sm" data-action="select-books-view" data-view="vendors">'+icon("users",14)+' Vendors</button>'+
+        '<button class="btn '+(view==="pnl"?"gold":"ghost")+' sm" data-action="select-books-view" data-view="pnl">'+icon("dashboard",14)+' Profit &amp; loss</button>'+
+        '<button class="btn '+(view==="insights"?"gold":"ghost")+' sm" data-action="select-books-view" data-view="insights">'+icon("users",14)+' Insights</button>'+
+      '</div>'+
+      (view==="expenses" ? '<button class="btn gold sm" data-action="open-expense-modal-new">'+icon("plus",13)+' Add expense</button>' :
+        view==="vendors" ? '<button class="btn gold sm" data-action="open-vendor-modal-new">'+icon("plus",13)+' Add vendor</button>' : '')+
+    '</div>'+
+    (view==="vendors" ? renderBooksVendorsView() : view==="pnl" ? renderBooksPnl() : view==="insights" ? renderBooksInsights() : renderBooksExpensesView())
+  );
+}
+function renderBooksExpensesView(){
+  const business = state.business;
+  const expenses = state.expenses.slice().sort((a,b)=> (b.date||"").localeCompare(a.date||""));
+  const total = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  return (
+    (expenses.length===0 ? '' : '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">'+expenses.length+' expense'+(expenses.length===1?'':'s')+' recorded · Total '+money(total,business.currency)+'</div>')+
+    (expenses.length===0 ?
+      '<div class="empty" style="display:flex;flex-direction:column;gap:10px;align-items:center;padding:28px 16px;">'+
+        '<div>No expenses recorded yet — log rent, supplies, salaries and other costs here.</div>'+
+        '<button class="btn gold sm" data-action="open-expense-modal-new">'+icon("plus",13)+' Add expense</button>'+
+      '</div>' :
+      '<div style="display:flex;flex-direction:column;gap:10px;">'+
+        expenses.map(e=>{
+          const vendor = e.vendorId ? findVendor(e.vendorId) : null;
+          return '<div class="card" style="cursor:pointer;" data-action="open-expense-modal" data-id="'+e.id+'">'+
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">'+
+              '<div style="min-width:0;">'+
+                '<div style="font-weight:600;font-size:14px;">'+esc(e.category||"Expense")+(vendor?(' · '+esc(vendor.name)):'')+'</div>'+
+                (e.note ? '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">'+esc(e.note)+'</div>' : '')+
+                '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">'+fmtDate(e.date)+(e.method?(' · '+esc(e.method)):'')+'</div>'+
+              '</div>'+
+              '<span class="mono" style="font-weight:700;color:var(--rust);">-'+money(e.amount,business.currency)+'</span>'+
+            '</div>'+
+          '</div>';
+        }).join("")+
+      '</div>'
+    )
+  );
+}
+function renderBooksVendorsView(){
+  const business = state.business;
+  const vendors = state.vendors.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  return vendors.length===0 ?
+    '<div class="empty" style="display:flex;flex-direction:column;gap:10px;align-items:center;padding:28px 16px;">'+
+      '<div>No vendors yet — add suppliers you buy from to track what you spend with each.</div>'+
+      '<button class="btn gold sm" data-action="open-vendor-modal-new">'+icon("plus",13)+' Add vendor</button>'+
+    '</div>' :
+    '<div style="display:flex;flex-direction:column;gap:10px;">'+
+      vendors.map(v=>{
+        const spend = state.expenses.filter(e=>e.vendorId===v.id).reduce((s,e)=>s+Number(e.amount||0),0);
+        return '<div class="card" style="cursor:pointer;" data-action="open-vendor-modal" data-id="'+v.id+'">'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">'+
+            '<div style="min-width:0;">'+
+              '<div style="font-weight:600;font-size:14px;">'+esc(v.name)+'</div>'+
+              '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">'+(v.category?esc(v.category)+' · ':'')+(v.phone?esc(v.phone):'No phone on file')+'</div>'+
+            '</div>'+
+            '<span class="mono" style="font-weight:600;">'+money(spend,business.currency)+'</span>'+
+          '</div>'+
+        '</div>';
+      }).join("")+
+    '</div>';
+}
+function renderBooksPnl(){
+  const business = state.business;
+  const period = state.booksPeriod || "month";
+  const range = booksPeriodRange(period);
+  const revenue = periodRevenue(range);
+  const cogs = periodCOGS(range);
+  const grossProfit = revenue - cogs;
+  const expenses = periodExpenses(range);
+  const expenseTotal = expenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const netProfit = grossProfit - expenseTotal;
+
+  const byCat = {};
+  expenses.forEach(e=>{ byCat[e.category||"Other"] = (byCat[e.category||"Other"]||0) + Number(e.amount||0); });
+  const catRows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+
+  const vendorSpendMap = {};
+  expenses.forEach(e=>{ if(e.vendorId) vendorSpendMap[e.vendorId] = (vendorSpendMap[e.vendorId]||0) + Number(e.amount||0); });
+  const topVendors = Object.entries(vendorSpendMap).map(([id,total])=>({vendor:findVendor(id), total})).filter(x=>x.vendor).sort((a,b)=>b.total-a.total).slice(0,5);
+
+  const periodLabels = {month:"This month", lastmonth:"Last month", all:"All time"};
+
+  return (
+    '<div class="chipbar" style="margin-bottom:14px;">'+
+      Object.keys(periodLabels).map(p=>
+        '<button class="btn '+(period===p?"gold":"ghost")+' sm" data-action="select-books-period" data-period="'+p+'">'+periodLabels[p]+'</button>'
+      ).join("")+
+    '</div>'+
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;margin-bottom:12px;">Profit &amp; loss — '+periodLabels[period]+'</div>'+
+      '<div class="rowline"><span>Revenue (payments received)</span><span class="mono" style="font-weight:500;">'+money(revenue,business.currency)+'</span></div>'+
+      '<div class="rowline"><span>Cost of goods sold <span style="color:var(--ink-soft);font-size:11px;">(from Stock sales)</span></span><span class="mono" style="font-weight:500;color:var(--rust);">-'+money(cogs,business.currency)+'</span></div>'+
+      '<div class="rowline" style="border-bottom:2px solid var(--line);"><span style="font-weight:600;">Gross profit</span><span class="mono" style="font-weight:700;color:'+(grossProfit>=0?'var(--green)':'var(--rust)')+';">'+money(grossProfit,business.currency)+'</span></div>'+
+      '<div class="rowline"><span>Operating expenses</span><span class="mono" style="font-weight:500;color:var(--rust);">-'+money(expenseTotal,business.currency)+'</span></div>'+
+      '<div class="rowline" style="border-bottom:none;padding-top:10px;"><span style="font-weight:700;font-size:14.5px;">Net profit</span><span class="mono" style="font-weight:800;font-size:14.5px;color:'+(netProfit>=0?'var(--green)':'var(--rust)')+';">'+money(netProfit,business.currency)+'</span></div>'+
+    '</div>'+
+    (catRows.length===0 ? '' :
+      '<div class="card" style="margin-bottom:16px;"><div class="disp" style="font-weight:600;margin-bottom:10px;">Expenses by category</div>'+
+        catRows.map(([cat,total])=>'<div class="rowline"><span>'+esc(cat)+'</span><span class="mono" style="font-weight:500;">'+money(total,business.currency)+'</span></div>').join("")+
+      '</div>'
+    )+
+    (topVendors.length===0 ? '' :
+      '<div class="card"><div class="disp" style="font-weight:600;margin-bottom:10px;">Top vendors by spend</div>'+
+        topVendors.map(({vendor,total})=>'<div class="rowline"><span>'+esc(vendor.name)+'</span><span class="mono" style="font-weight:500;">'+money(total,business.currency)+'</span></div>').join("")+
+      '</div>'
+    )
+  );
+}
+function renderBooksInsights(){
+  const business = state.business;
+  const period = state.booksPeriod || "month";
+  const range = booksPeriodRange(period);
+  const periodLabels = {month:"This month", lastmonth:"Last month", all:"All time"};
+  const realOrders = state.orders.filter(isRealOrder);
+
+  const ordersInPeriod = realOrders.filter(o => o.status!=="Cancelled" && inBooksPeriod((o.createdAt||"").slice(0,10), range));
+  const revenueInPeriod = ordersInPeriod.reduce((s,o)=>s+orderTotal(o),0);
+  const avgOrderValue = ordersInPeriod.length ? revenueInPeriod/ordersInPeriod.length : 0;
+
+  // Best sellers within the period, by line-item description.
+  const salesCount = {}, salesRevenue = {};
+  ordersInPeriod.forEach(o=>(o.items||[]).forEach(it=>{
+    if(!it.desc) return;
+    salesCount[it.desc] = (salesCount[it.desc]||0)+1;
+    salesRevenue[it.desc] = (salesRevenue[it.desc]||0)+Number(it.price||0);
+  }));
+  const bestSellers = Object.keys(salesCount).map(desc=>({desc, count:salesCount[desc], revenue:salesRevenue[desc]}))
+    .sort((a,b)=>b.count-a.count).slice(0,8);
+
+  // Repeat-client rate — a lifetime metric across all real orders, not period-scoped.
+  const ordersByClient = {};
+  realOrders.forEach(o=>{ if(!o.clientId) return; (ordersByClient[o.clientId]=ordersByClient[o.clientId]||[]).push(o); });
+  const clientIdsWithOrders = Object.keys(ordersByClient);
+  const repeatClientIds = clientIdsWithOrders.filter(id=>ordersByClient[id].length>1);
+  const repeatRate = clientIdsWithOrders.length ? Math.round((repeatClientIds.length/clientIdsWithOrders.length)*100) : 0;
+
+  // New vs returning, scoped to the selected period: a client counts as "new"
+  // if their earliest-ever order falls inside the period.
+  const firstOrderDate = {};
+  clientIdsWithOrders.forEach(id=>{
+    const dates = ordersByClient[id].map(o=>(o.createdAt||"")).filter(Boolean).sort();
+    firstOrderDate[id] = dates[0]||"";
+  });
+  const periodClientIds = Array.from(new Set(ordersInPeriod.map(o=>o.clientId).filter(Boolean)));
+  const newClientIds = periodClientIds.filter(id => inBooksPeriod((firstOrderDate[id]||"").slice(0,10), range));
+  const returningCount = periodClientIds.length - newClientIds.length;
+
+  const kpi = (label, value, sub) =>
+    '<div style="flex:1;min-width:120px;"><div style="font-size:11.5px;color:var(--ink-soft);">'+esc(label)+'</div>'+
+    '<div class="mono" style="font-weight:700;font-size:16px;">'+value+'</div>'+
+    (sub?'<div style="font-size:10.5px;color:var(--ink-soft);">'+esc(sub)+'</div>':'')+'</div>';
+
+  return (
+    '<div class="chipbar" style="margin-bottom:14px;">'+
+      Object.keys(periodLabels).map(p=>
+        '<button class="btn '+(period===p?"gold":"ghost")+' sm" data-action="select-books-period" data-period="'+p+'">'+periodLabels[p]+'</button>'
+      ).join("")+
+    '</div>'+
+    '<div class="card" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;">'+
+      kpi(nounFor("recordPlural")+" placed", ordersInPeriod.length, periodLabels[period])+
+      kpi("Avg order value", money(avgOrderValue,business.currency))+
+      kpi("New clients", newClientIds.length, periodLabels[period])+
+      kpi("Returning clients", Math.max(0,returningCount), periodLabels[period])+
+    '</div>'+
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;margin-bottom:4px;">Repeat-client rate</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Share of all-time '+nounFor("clientPlural").toLowerCase()+' with more than one '+nounFor("record").toLowerCase()+' — a lifetime figure, not limited to the period above.</div>'+
+      '<div style="display:flex;align-items:center;gap:12px;">'+
+        '<div class="mono" style="font-size:26px;font-weight:800;color:'+(repeatRate>=30?"var(--green)":"var(--ink)")+';">'+repeatRate+'%</div>'+
+        '<div style="font-size:12px;color:var(--ink-soft);">'+repeatClientIds.length+' of '+clientIdsWithOrders.length+' '+nounFor("clientPlural").toLowerCase()+' have come back for more than one '+nounFor("record").toLowerCase()+'.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="disp" style="font-weight:600;margin-bottom:10px;">Best sellers — '+periodLabels[period]+'</div>'+
+      (bestSellers.length===0 ? '<div class="empty">No sales recorded in this period yet.</div>' :
+        bestSellers.map((b,i)=>
+          '<div class="rowline"><span>'+(i+1)+'. '+esc(b.desc)+'</span>'+
+          '<span style="display:flex;gap:10px;align-items:center;">'+
+            '<span style="font-size:11.5px;color:var(--ink-soft);">×'+b.count+'</span>'+
+            '<span class="mono" style="font-weight:600;">'+money(b.revenue,business.currency)+'</span>'+
+          '</span></div>'
+        ).join("")
+      )+
+    '</div>'
+  );
+}
+function openVendorModal(existing){
+  state.modal = { type:"vendor", isNew: !existing,
+    draft: existing ? JSON.parse(JSON.stringify(existing)) : { id:uid(), name:"", phone:"", category:"", address:"", notes:"", createdAt:new Date().toISOString() } };
+  pushNav();
+  render();
+}
+function openExpenseModal(existing){
+  state.modal = { type:"expense", isNew: !existing,
+    draft: existing ? JSON.parse(JSON.stringify(existing)) : { id:uid(), vendorId:"", category:EXPENSE_CATEGORIES[0], amount:"", date: todayISO(), method:"Cash", note:"", createdAt:new Date().toISOString() } };
+  pushNav();
+  render();
+}
+function renderVendorModal(){
+  const v = state.modal.draft;
+  const isNew = state.modal.isNew;
+  const spend = isNew ? 0 : state.expenses.filter(e=>e.vendorId===v.id).reduce((s,e)=>s+Number(e.amount||0),0);
+  return modalShell(isNew ? "Add vendor" : "Edit vendor",
+    '<div style="display:flex;flex-direction:column;gap:12px;">'+
+      '<div><label>Vendor name</label><input type="text" data-bind="modal.draft.name" value="'+esc(v.name)+'" placeholder="e.g. Lagos Fabric Wholesale"></div>'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;"><label>Phone</label><input type="tel" data-bind="modal.draft.phone" value="'+esc(v.phone||"")+'" placeholder="080..."></div>'+
+        '<div style="flex:1;"><label>Category</label><input type="text" data-bind="modal.draft.category" value="'+esc(v.category||"")+'" placeholder="e.g. Fabric supplier"></div>'+
+      '</div>'+
+      '<div><label>Address</label><input type="text" data-bind="modal.draft.address" value="'+esc(v.address||"")+'" placeholder="Optional"></div>'+
+      '<div><label>Notes</label><textarea data-bind="modal.draft.notes" rows="2" placeholder="Optional">'+esc(v.notes||"")+'</textarea></div>'+
+      (isNew ? '' : '<div style="font-size:12.5px;color:var(--ink-soft);">Total spent with this vendor: <strong style="color:var(--ink);">'+money(spend,state.business.currency)+'</strong></div>')+
+      '<div style="display:flex;gap:10px;margin-top:6px;">'+
+        (isNew ? '' : '<button class="btn ghost sm" data-action="delete-vendor" data-id="'+v.id+'" style="color:var(--rust);">'+icon("trash",13)+' Delete</button>')+
+        '<button id="modalSaveBtn" class="btn gold" style="flex:1;" data-action="save-vendor" '+(v.name.trim()?'':'disabled')+'>Save vendor</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+function renderExpenseModal(){
+  const e = state.modal.draft;
+  const isNew = state.modal.isNew;
+  return modalShell(isNew ? "Add expense" : "Edit expense",
+    '<div style="display:flex;flex-direction:column;gap:12px;">'+
+      '<div style="display:flex;gap:10px;">'+
+        '<div style="flex:1;"><label>Amount</label><input class="mono" type="number" data-bind="modal.draft.amount" value="'+esc(e.amount)+'" placeholder="0"></div>'+
+        '<div style="flex:1;"><label>Date</label><input type="date" data-bind="modal.draft.date" value="'+esc(e.date||"")+'"></div>'+
+      '</div>'+
+      '<div><label>Category</label><select data-bind="modal.draft.category">'+
+        EXPENSE_CATEGORIES.map(c=>'<option value="'+esc(c)+'" '+(e.category===c?'selected':'')+'>'+esc(c)+'</option>').join("")+
+      '</select></div>'+
+      '<div><label>Vendor (optional)</label><select data-bind="modal.draft.vendorId">'+
+        '<option value="">No vendor</option>'+
+        state.vendors.map(v=>'<option value="'+v.id+'" '+(e.vendorId===v.id?'selected':'')+'>'+esc(v.name)+'</option>').join("")+
+      '</select></div>'+
+      '<div><label>Payment method</label><select data-bind="modal.draft.method">'+
+        ["Cash","Transfer","Card","Cheque","Other"].map(m=>'<option value="'+m+'" '+(e.method===m?'selected':'')+'>'+m+'</option>').join("")+
+      '</select></div>'+
+      '<div><label>Note (optional)</label><input type="text" data-bind="modal.draft.note" value="'+esc(e.note||"")+'" placeholder="Optional"></div>'+
+      '<div style="display:flex;gap:10px;margin-top:6px;">'+
+        (isNew ? '' : '<button class="btn ghost sm" data-action="delete-expense" data-id="'+e.id+'" style="color:var(--rust);">'+icon("trash",13)+' Delete</button>')+
+        '<button class="btn gold" style="flex:1;" data-action="save-expense">Save expense</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+
+/* ================= SIGNATURE ================= */
+/* ================= BILLING SETTINGS ================= */
+function ensureBilling(b){
+  if(!b.billing) b.billing = { invoicePrefix:"INV", receiptPrefix:"RCT", quotePrefix:"EST", nextInvoiceSeq:1, nextReceiptSeq:1, nextQuoteSeq:1, defaultTaxPercent:0 };
+  return b.billing;
+}
+function ensureDocNumber(order, kind){
+  const business = state.business;
+  const billing = ensureBilling(business);
+  const map = { invoice:["invoiceNo","invoicePrefix","nextInvoiceSeq"], receipt:["receiptNo","receiptPrefix","nextReceiptSeq"], quote:["quoteNo","quotePrefix","nextQuoteSeq"] };
+  const [field, prefixKey, seqKey] = map[kind]||map.invoice;
+  if(!order[field]){
+    const seq = billing[seqKey]||1;
+    order[field] = (billing[prefixKey]||"") + "-" + String(seq).padStart(4,"0");
+    billing[seqKey] = seq+1;
+    persistOrders(); persistBusiness();
+  }
+  return order[field];
+}
+function renderBillingCard(b){
+  const billing = ensureBilling(b);
+  return (
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="billing">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Invoicing &amp; tax</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Set the prefixes used for invoice, receipt and quote numbers, and a default tax rate applied to new '+esc(nounFor("recordPlural")).toLowerCase()+'.</div>'+
+      '<div class="grid-form2">'+
+        '<div><label>Invoice prefix</label><input data-bind="business.billing.invoicePrefix" value="'+esc(billing.invoicePrefix)+'" placeholder="INV"></div>'+
+        '<div><label>Next invoice number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.invoicePrefix)+'-'+String(billing.nextInvoiceSeq).padStart(4,"0")+'</div></div>'+
+        '<div><label>Receipt prefix</label><input data-bind="business.billing.receiptPrefix" value="'+esc(billing.receiptPrefix)+'" placeholder="RCT"></div>'+
+        '<div><label>Next receipt number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.receiptPrefix)+'-'+String(billing.nextReceiptSeq).padStart(4,"0")+'</div></div>'+
+        '<div><label>Quote / estimate prefix</label><input data-bind="business.billing.quotePrefix" value="'+esc(billing.quotePrefix)+'" placeholder="EST"></div>'+
+        '<div><label>Next quote number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.quotePrefix)+'-'+String(billing.nextQuoteSeq).padStart(4,"0")+'</div></div>'+
+        '<div><label>Default tax rate (%)</label><input class="mono" type="number" data-bind="business.billing.defaultTaxPercent" value="'+esc(billing.defaultTaxPercent)+'" placeholder="0"></div>'+
+      '</div>'+
+    '</div>'
+  );
+}
+
+function renderSignatureCard(b){
+  if(!b.signature){
+    b.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
+  }
+  const sig = b.signature;
+  const mode = sig.mode||"draw";
+  return (
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="signature">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Signature</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Add a signature to stamp on the invoices and receipts you share with '+esc(nounFor("clientPlural")).toLowerCase()+'.</div>'+
+      '<div class="chipbar" style="margin-bottom:14px;">'+
+        '<button class="btn '+(mode==="draw"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="draw">'+icon("edit",13)+' Draw / upload</button>'+
+        '<button class="btn '+(mode==="typed"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="typed">Aa Type</button>'+
+      '</div>'+
+      (mode==="typed" ? renderSignatureTypedArea(b) : renderSignatureDrawArea(sig))+
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">'+
+        '<div class="rowline"><span style="font-size:13px;">Show on invoices</span>'+
+          '<label class="switch"><input type="checkbox" data-action="toggle-signature-invoice" '+(sig.showOnInvoice!==false?"checked":"")+'><span class="slider"></span></label></div>'+
+        '<div class="rowline"><span style="font-size:13px;">Show on receipts</span>'+
+          '<label class="switch"><input type="checkbox" data-action="toggle-signature-receipt" '+(sig.showOnReceipt!==false?"checked":"")+'><span class="slider"></span></label></div>'+
+      '</div>'+
+    '</div>'
+  );
+}
+function renderSignatureDrawArea(sig){
+  const hasImage = !!sig.image;
+  const redrawing = !!state.sigRedrawing;
+  if(hasImage && !redrawing){
+    return (
+      '<div class="sig-preview-box" style="margin-bottom:10px;"><img src="'+sig.image+'" alt="Signature" style="max-width:100%;max-height:100px;object-fit:contain;"></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn ghost sm" data-action="start-signature-redraw">'+icon("edit",13)+' Redraw</button>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
+        '<button class="btn ghost sm" style="color:var(--rust);" data-action="remove-signature">'+icon("trash",13)+' Remove</button>'+
+      '</div>'
+    );
+  }
+  return (
+    '<canvas id="sigCanvas" class="sigpad-canvas" style="margin-bottom:10px;"></canvas>'+
+    '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Draw your signature above with a finger, stylus or mouse.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn ghost sm" data-action="clear-signature-canvas">'+icon("x",13)+' Clear</button>'+
+      '<button class="btn gold sm" data-action="save-signature-canvas">'+icon("check",13)+' Save signature</button>'+
+      '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
+      (sig.image ? '<button class="btn ghost sm" data-action="cancel-signature-redraw">Cancel</button>' : '')+
+    '</div>'
+  );
+}
+function renderSignatureTypedArea(b){
+  const sig = b.signature;
+  const text = sig.text||"";
+  const font = sig.font||"Dancing Script";
+  return (
+    '<div class="sig-preview-box" style="margin-bottom:12px;">'+
+      '<span id="sigTypedPreview" style="font-family:\''+esc(font)+'\',cursive;font-size:34px;color:var(--ink);">'+esc(text)+'</span>'+
+    '</div>'+
+    '<div style="margin-bottom:12px;"><label>Signature text</label><input data-bind="business.signature.text" value="'+esc(text)+'" placeholder="e.g. '+esc(b.name||"Your name")+'"></div>'+
+    '<label style="margin-bottom:6px;">Style</label>'+
+    '<div class="chipbar scroll">'+
+      SIGNATURE_FONTS.map(f => '<button class="btn '+(font===f.key?"gold":"ghost")+' sm" data-action="set-signature-font" data-font="'+esc(f.key)+'" style="font-family:\''+esc(f.key)+'\',cursive;font-size:15px;">'+esc(f.label)+'</button>').join("")+
+    '</div>'
+  );
+}
+function initSignaturePad(){
+  const canvas = document.getElementById("sigCanvas");
+  if(!canvas || canvas._sigInit) return;
+  canvas._sigInit = true;
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1,Math.round(rect.width*dpr));
+  canvas.height = Math.max(1,Math.round(rect.height*dpr));
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr,dpr);
+  ctx.lineWidth = 2.4; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1E2A28";
+  let drawing = false, lastX = 0, lastY = 0;
+  function pos(e){
+    const r = canvas.getBoundingClientRect();
+    return [e.clientX-r.left, e.clientY-r.top];
+  }
+  function start(e){ drawing = true; [lastX,lastY] = pos(e); e.preventDefault(); }
+  function move(e){
+    if(!drawing) return;
+    const [x,y] = pos(e);
+    ctx.beginPath(); ctx.moveTo(lastX,lastY); ctx.lineTo(x,y); ctx.stroke();
+    [lastX,lastY] = [x,y];
+    canvas.dataset.hasDrawn = "1";
+    e.preventDefault();
+  }
+  function end(){ drawing = false; }
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointerleave", end);
+  canvas.addEventListener("pointercancel", end);
+}
+
 /* ================= ACCOUNT ================= */
 function renderAccount(){
   const b = state.business;
@@ -2093,6 +2922,8 @@ function renderAccount(){
       ((b.bankAccounts||[]).length===0 ? '<div class="empty" style="margin-bottom:10px;">No bank accounts added yet.</div>' : '')+
       '<button class="btn ghost sm" data-action="add-bank-account">'+icon("plus",14)+' Add another account</button>'+
     '</div>'+
+    renderSignatureCard(b)+
+    renderBillingCard(b)+
     '<div class="card" style="margin-bottom:16px;" data-tour-target="manage-catalogue">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Manage catalogue</div>'+
       '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Add categories, priced items and photos here. Clients browse and get sent these from the Catalogue tab.</div>'+
@@ -2205,6 +3036,10 @@ function renderModal(){
   if(state.modal.type==="catitem") return renderCatItemModal();
   if(state.modal.type==="catitem-view") return renderCatItemView();
   if(state.modal.type==="catpicker") return renderCatalogPickerModal();
+  if(state.modal.type==="invitem") return renderInvItemModal();
+  if(state.modal.type==="stockmove") return renderStockMoveModal();
+  if(state.modal.type==="vendor") return renderVendorModal();
+  if(state.modal.type==="expense") return renderExpenseModal();
   if(state.modal.type==="notifications") return renderNotificationsModal();
   if(state.modal.type==="global-search") return renderGlobalSearchModal();
   if(state.modal.type==="custom-theme") return renderCustomThemeModal();
@@ -2333,8 +3168,12 @@ function renderOrderModal(){
   const clients = state.clients;
   const business = state.business;
   const client = clients.find(c=>c.id===o.clientId);
+  const kind = recordKind(o);
+  const isQuote = kind==="quote";
+  const sub = orderSubtotal(o), discount = orderDiscountAmount(o), tax = orderTaxAmount(o);
   const total = orderTotal(o), paid = orderPaid(o), bal = total-paid;
-  const info = statusInfo(o.status);
+  const info = statusInfo2(o.status, o);
+  const recLabel = isQuote ? "quote" : nounFor("record").toLowerCase();
 
   const itemsHtml = o.items.map((it,i)=>(
     '<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">'+
@@ -2351,30 +3190,44 @@ function renderOrderModal(){
   )).join("") || '<div class="empty">No payments recorded yet.</div>';
 
   const invoiceSection = state.modal.isExisting && client ? (
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Invoice &amp; reminders</div>'+
-    '<div>'+
-      '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Invoice</span>'+
-        '<span style="display:flex;gap:6px;">'+
-          '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="invoice" title="Share invoice via WhatsApp" aria-label="Share invoice">'+icon("send",15)+'</button>'+
-          '<button class="iconbtn" data-action="download-invoice-image" data-kind="invoice" title="Download invoice image" aria-label="Download invoice">'+icon("download",15)+'</button>'+
-        '</span>'+
-      '</div>'+
-      '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
-        '<span style="display:flex;gap:6px;">'+
-          '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
-          '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
-        '</span>'+
-      '</div>'+
-      (bal>0 ?
-        '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Payment reminder</span>'+
+    isQuote ? (
+      '<div class="divider"></div>'+
+      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Estimate</div>'+
+      '<div>'+
+        '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Share estimate</span>'+
           '<span style="display:flex;gap:6px;">'+
-            '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-reminder-image" title="Send payment reminder via WhatsApp" aria-label="Send payment reminder">'+icon("send",15)+'</button>'+
-            '<button class="iconbtn" data-action="download-reminder-image" title="Download payment reminder image" aria-label="Download payment reminder">'+icon("download",15)+'</button>'+
+            '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="quote" title="Share estimate via WhatsApp" aria-label="Share estimate">'+icon("send",15)+'</button>'+
+            '<button class="iconbtn" data-action="download-invoice-image" data-kind="quote" title="Download estimate image" aria-label="Download estimate">'+icon("download",15)+'</button>'+
           '</span>'+
-        '</div>'
-      : '')+
-    '</div>'
+        '</div>'+
+      '</div>'+
+      '<div style="margin-top:10px;"><button class="btn gold sm" data-action="convert-quote-to-order">'+icon("check",14)+' Convert to '+nounFor("record").toLowerCase()+'</button></div>'
+    ) : (
+      '<div class="divider"></div>'+
+      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Invoice &amp; reminders</div>'+
+      '<div>'+
+        '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Invoice</span>'+
+          '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="invoice" title="Share invoice via WhatsApp" aria-label="Share invoice">'+icon("send",15)+'</button>'+
+            '<button class="iconbtn" data-action="download-invoice-image" data-kind="invoice" title="Download invoice image" aria-label="Download invoice">'+icon("download",15)+'</button>'+
+          '</span>'+
+        '</div>'+
+        '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
+          '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
+            '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
+          '</span>'+
+        '</div>'+
+        (bal>0 ?
+          '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Payment reminder</span>'+
+            '<span style="display:flex;gap:6px;">'+
+              '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-reminder-image" title="Send payment reminder via WhatsApp" aria-label="Send payment reminder">'+icon("send",15)+'</button>'+
+              '<button class="iconbtn" data-action="download-reminder-image" title="Download payment reminder image" aria-label="Download payment reminder">'+icon("download",15)+'</button>'+
+            '</span>'+
+          '</div>'
+        : '')+
+      '</div>'
+    )
   ) : "";
 
   if(!o.custom) o.custom = {};
@@ -2382,20 +3235,82 @@ function renderOrderModal(){
     '<div><label>'+esc(f.label)+'</label><input '+(f.type==="number"?'class="mono" type="number"':'type="text"')+' data-bind="modal.draft.custom.'+f.key+'" value="'+esc(o.custom[f.key]||"")+'" placeholder="'+esc(f.placeholder||"")+'"></div>'
   ).join("");
 
-  return modalShell(state.modal.isNew?"New "+nounFor("record").toLowerCase():"Edit "+nounFor("record").toLowerCase(),
+  const discountTaxHtml =
+    '<div class="divider"></div>'+
+    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Discount &amp; tax</div>'+
+    '<div class="grid-form2">'+
+      '<div><label>Discount</label><div style="display:flex;gap:6px;">'+
+        '<input class="mono" type="number" style="flex:1;" data-bind="modal.draft.discountValue" value="'+esc(o.discountValue||0)+'" placeholder="0">'+
+        '<select style="max-width:90px;" data-bind="modal.draft.discountType" data-rerender="1">'+
+          '<option value="percent" '+(o.discountType!=="flat"?"selected":"")+'>%</option>'+
+          '<option value="flat" '+(o.discountType==="flat"?"selected":"")+'>'+esc(business.currency||"")+'</option>'+
+        '</select>'+
+      '</div></div>'+
+      '<div><label>Tax rate (%)</label><input class="mono" type="number" data-bind="modal.draft.taxPercent" value="'+esc(o.taxPercent||0)+'" placeholder="0"></div>'+
+    '</div>';
+
+  if(!o.recurring) o.recurring = { enabled:false, frequency:"monthly", intervalDays:30, nextDate:"" };
+  const rec = o.recurring;
+  const recurringHtml = isQuote ? '' : (
+    '<div class="divider"></div>'+
+    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Recurring billing</div>'+
+    '<div class="rowline" style="padding:0 0 10px 0;border-bottom:none;"><span style="font-size:13px;">Repeat this order automatically</span>'+
+      '<label class="switch"><input type="checkbox" data-action="toggle-order-recurring" '+(rec.enabled?"checked":"")+'><span class="slider"></span></label></div>'+
+    (rec.enabled ? (
+      '<div class="grid-form2">'+
+        '<div><label>Frequency</label><select data-bind="modal.draft.recurring.frequency" data-rerender="1">'+
+          RECURRING_FREQUENCIES.map(f=>'<option value="'+f.key+'" '+(rec.frequency===f.key?"selected":"")+'>'+esc(f.label)+'</option>').join("")+
+        '</select></div>'+
+        (rec.frequency==="custom" ? '<div><label>Every (days)</label><input class="mono" type="number" data-bind="modal.draft.recurring.intervalDays" value="'+esc(rec.intervalDays||30)+'"></div>' : '')+
+        '<div><label>Next renewal date</label><input type="date" data-bind="modal.draft.recurring.nextDate" value="'+esc(rec.nextDate||"")+'"></div>'+
+      '</div>'+
+      (state.modal.isExisting ? (
+        '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
+          '<button class="btn ghost sm" data-action="generate-recurring-from-modal">'+icon("send",13)+' Generate next invoice now</button>'+
+          (rec.lastGeneratedAt ? '<span style="font-size:11.5px;color:var(--ink-soft);">Last generated '+fmtDate(rec.lastGeneratedAt.slice(0,10))+'</span>' : '')+
+        '</div>'
+      ) : '')
+    ) : '<div style="font-size:12px;color:var(--ink-soft);">Turn this on for subscriptions, retainers, or repeat service bookings — a reminder will surface here when the next invoice is due (the app needs to be open to catch it, since there\'s no background server).</div>')
+  );
+
+  const totalsCardHtml = isQuote ?
+    '<div class="card" style="display:flex;gap:16px;margin-bottom:10px;padding:12px;flex-wrap:wrap;">'+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Subtotal</div><div class="mono" id="ordSubVal" style="font-weight:600;">'+money(sub,business.currency)+'</div></div>'+
+      (discount>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Discount</div><div class="mono" id="ordDiscVal" style="font-weight:600;color:var(--rust);">-'+money(discount,business.currency)+'</div></div>':'')+
+      (tax>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Tax</div><div class="mono" id="ordTaxVal" style="font-weight:600;">'+money(tax,business.currency)+'</div></div>':'')+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Total estimate</div><div class="mono" id="ordTotalVal" style="font-weight:600;">'+money(total,business.currency)+'</div></div>'+
+    '</div>'
+    :
+    '<div class="card" style="display:flex;gap:16px;margin-bottom:10px;padding:12px;flex-wrap:wrap;">'+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Subtotal</div><div class="mono" id="ordSubVal" style="font-weight:600;">'+money(sub,business.currency)+'</div></div>'+
+      (discount>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Discount</div><div class="mono" id="ordDiscVal" style="font-weight:600;color:var(--rust);">-'+money(discount,business.currency)+'</div></div>':'')+
+      (tax>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Tax</div><div class="mono" id="ordTaxVal" style="font-weight:600;">'+money(tax,business.currency)+'</div></div>':'')+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Total</div><div class="mono" id="ordTotalVal" style="font-weight:600;">'+money(total,business.currency)+'</div></div>'+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Paid</div><div class="mono" id="ordPaidVal" style="font-weight:600;color:var(--green);">'+money(paid,business.currency)+'</div></div>'+
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Balance</div><div class="mono" id="ordBalanceVal" style="font-weight:600;color:'+(bal>0?"var(--rust)":"var(--green)")+';">'+money(bal,business.currency)+'</div></div>'+
+    '</div>';
+
+  return modalShell(state.modal.isNew?"New "+recLabel:"Edit "+recLabel,
+    (state.modal.isNew ?
+      '<div class="chipbar" style="margin-bottom:12px;">'+
+        '<button class="btn '+(!isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="order">'+esc(nounFor("record"))+'</button>'+
+        '<button class="btn '+(isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="quote">Quote / estimate</button>'+
+      '</div>' : (isQuote ? '<div class="pill status-draft" style="margin-bottom:12px;display:inline-block;">Quote / estimate</div>' : '')
+    )+
     '<div class="grid-form2">'+
       '<div><label>Client</label><select data-bind="modal.draft.clientId" data-rerender="1">'+
         (clients.length===0 ? '<option value="">No clients yet</option>' : clients.map(c=>'<option value="'+c.id+'" '+(o.clientId===c.id?"selected":"")+'>'+esc(c.name)+'</option>').join(""))+
       '</select></div>'+
-      '<div><label>Order title</label><input data-bind="modal.draft.title" value="'+esc(o.title)+'" placeholder="Wedding aso-ebi, native wear..."></div>'+
-      '<div><label>Due date</label><input type="date" data-bind="modal.draft.dueDate" value="'+esc(o.dueDate)+'"></div>'+
+      '<div><label>'+(isQuote?"Quote title":"Order title")+'</label><input data-bind="modal.draft.title" value="'+esc(o.title)+'" placeholder="Wedding aso-ebi, native wear..."></div>'+
+      '<div><label>'+(isQuote?"Valid until":"Due date")+'</label><input type="date" data-bind="modal.draft.dueDate" value="'+esc(o.dueDate)+'"></div>'+
       '<div><label>Status</label><select data-bind="modal.draft.status" data-rerender="1">'+
-        currentStatuses().map(s=>'<option value="'+s.key+'" '+(o.status===s.key?"selected":"")+'>'+s.key+'</option>').join("")+
+        statusesFor(kind).map(s=>'<option value="'+s.key+'" '+(o.status===s.key?"selected":"")+'>'+s.key+'</option>').join("")+
       '</select></div>'+
-      extraRecordFieldsHtml+
+      (isQuote ? '' : extraRecordFieldsHtml)+
     '</div>'+
-    '<div style="margin-top:14px;"><div class="tape-track '+(o.status==="Cancelled"?"cancelled":"")+'"><div class="fill" style="width:'+info.pct+'%;"></div></div>'+
-      '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>'+
+    (isQuote ? '' :
+      '<div style="margin-top:14px;"><div class="tape-track '+(o.status==="Cancelled"?"cancelled":"")+'"><div class="fill" style="width:'+info.pct+'%;"></div></div>'+
+      '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>')+
     '<div class="divider"></div>'+
     '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Items &amp; pricing</div>'+
     itemsHtml+
@@ -2403,23 +3318,23 @@ function renderOrderModal(){
       '<button class="btn ghost sm" data-action="add-order-item">'+icon("plus",14)+' Add item</button>'+
       '<button class="btn ghost sm" data-action="open-catalog-picker">'+icon("image",14)+' From catalogue</button>'+
     '</div>'+
+    discountTaxHtml+
+    recurringHtml+
     '<div class="divider"></div>'+
     imagePickerHtml("Style chosen to be sewn", o.styleImages, "modal.draft.styleImages")+
     '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Payments</div>'+
-    '<div class="card" style="display:flex;gap:16px;margin-bottom:10px;padding:12px;flex-wrap:wrap;">'+
-      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Total</div><div class="mono" id="ordTotalVal" style="font-weight:600;">'+money(total,business.currency)+'</div></div>'+
-      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Paid</div><div class="mono" id="ordPaidVal" style="font-weight:600;color:var(--green);">'+money(paid,business.currency)+'</div></div>'+
-      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Balance</div><div class="mono" id="ordBalanceVal" style="font-weight:600;color:'+(bal>0?"var(--rust)":"var(--green)")+';">'+money(bal,business.currency)+'</div></div>'+
-    '</div>'+
-    paymentsHtml+
-    '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
-      '<input class="mono" type="number" placeholder="Amount received" data-bind="modal.payAmt" value="'+esc(state.modal.payAmt||"")+'" style="flex:1;min-width:140px;">'+
-      '<select data-bind="modal.payMethod" style="max-width:140px;">'+
-        ["Cash","Bank transfer","POS/Card","Other"].map(m=>'<option '+(state.modal.payMethod===m?"selected":"")+'>'+m+'</option>').join("")+
-      '</select>'+
-      '<button class="btn gold sm" data-action="add-payment">'+icon("plus",14)+' Add</button>'+
-    '</div>'+
+    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">'+(isQuote?"Estimate total":"Payments")+'</div>'+
+    totalsCardHtml+
+    (isQuote ? '' : (
+      paymentsHtml+
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
+        '<input class="mono" type="number" placeholder="Amount received" data-bind="modal.payAmt" value="'+esc(state.modal.payAmt||"")+'" style="flex:1;min-width:140px;">'+
+        '<select data-bind="modal.payMethod" style="max-width:140px;">'+
+          ["Cash","Bank transfer","POS/Card","Other"].map(m=>'<option '+(state.modal.payMethod===m?"selected":"")+'>'+m+'</option>').join("")+
+        '</select>'+
+        '<button class="btn gold sm" data-action="add-payment">'+icon("plus",14)+' Add</button>'+
+      '</div>'
+    ))+
     '<div style="margin-top:14px;"><label>Notes</label><textarea rows="2" data-bind="modal.draft.notes">'+esc(o.notes)+'</textarea></div>'+
     invoiceSection+
     (state.modal.isExisting && o.history && o.history.length ? (
@@ -2436,7 +3351,7 @@ function renderOrderModal(){
     ) : '')+
     '<div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:flex-end;">'+
       (state.modal.isExisting ? '<button class="btn rust sm" data-action="delete-order">'+icon("trash",14)+' Delete</button>' : '')+
-      (state.modal.isExisting ? '<button class="iconbtn" data-action="duplicate-order" title="Duplicate as new '+nounFor("record").toLowerCase()+'" aria-label="Duplicate as new '+nounFor("record").toLowerCase()+'">'+icon("plus",15)+'</button>' : '')+
+      (state.modal.isExisting ? '<button class="iconbtn" data-action="duplicate-order" title="Duplicate as new '+recLabel+'" aria-label="Duplicate as new '+recLabel+'">'+icon("plus",15)+'</button>' : '')+
       '<button class="btn ghost sm" data-action="close-modal">Cancel</button>'+
       '<button class="btn sm" '+(!o.clientId?"disabled":"")+' data-action="save-order">'+icon("check",15)+' Save</button>'+
     '</div>', true
@@ -2563,7 +3478,23 @@ function renderNotificationsModal(){
     '<div class="empty">All caught up — nothing due, overdue, or coming up in the next '+NEAR_DUE_DAYS+' days.</div>' :
     section("Overdue", alerts.overdue, "var(--rust)")+
     section("Due today", alerts.dueToday, "var(--gold)")+
-    section("Due soon", alerts.nearDue, "var(--ink-soft)");
+    section("Due soon", alerts.nearDue, "var(--ink-soft)")+
+    (alerts.renewals.length>0 ?
+      '<div style="margin-bottom:18px;">'+
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--primary);margin-bottom:6px;">Recurring renewals due ('+alerts.renewals.length+')</div>'+
+        alerts.renewals.map(({o,dleft,client}) => (
+          '<div class="rowline" style="align-items:flex-start;gap:8px;">'+
+            '<div style="cursor:pointer;flex:1;min-width:0;" data-action="open-order-modal" data-id="'+o.id+'">'+
+              '<div style="font-weight:500;font-size:13.5px;">'+esc(client?client.name:"Unknown client")+' — '+esc(o.title||"Order")+'</div>'+
+              '<div style="font-size:11.5px;color:'+(dleft<0?"var(--rust)":"var(--ink-soft)")+';margin-top:1px;">'+
+                (dleft<0 ? Math.abs(dleft)+"d overdue" : dleft===0 ? "Due today" : "Due in "+dleft+"d")+' · '+(o.recurring.frequency||"monthly")+
+              '</div>'+
+            '</div>'+
+            '<button class="btn gold sm" data-action="generate-recurring" data-id="'+o.id+'" style="flex-shrink:0;">'+icon("plus",13)+' Generate</button>'+
+          '</div>'
+        )).join("")+
+      '</div>'
+    : '');
   return modalShell("Notifications", body);
 }
 
@@ -2945,11 +3876,30 @@ async function pickContactPhone(){
     }
   }catch(e){ /* user cancelled the picker, or permission was denied */ }
 }
-function openOrderModal(existing, prefillClientId){
+function saveOrderDraft(){
+  const o = state.modal.draft;
+  if(!o.clientId) return null;
+  o.items = o.items.filter(it => (it.desc && it.desc.trim()) || Number(it.price)>0);
+  if(o.items.length===0) o.items = [{desc:"",price:0}];
+  const existingOrder = state.orders.find(x=>x.id===o.id);
+  const exists = !!existingOrder;
+  if(!o.history) o.history = existingOrder && existingOrder.history ? existingOrder.history.slice() : [];
+  if(!exists || !existingOrder || existingOrder.status !== o.status){
+    o.history.push({status:o.status, at:new Date().toISOString()});
+  }
+  state.orders = exists ? state.orders.map(x=>x.id===o.id?o:x) : state.orders.concat([o]);
+  persistOrders();
+  return o;
+}
+function openOrderModal(existing, prefillClientId, kind){
+  const billing = ensureBilling(state.business);
   state.modal = { type:"order", isNew: !existing, isExisting: !!existing, payAmt:"", payMethod:"Cash",
     draft: existing ? JSON.parse(JSON.stringify(existing)) : {
       id:uid(), clientId: prefillClientId || (state.clients[0]?state.clients[0].id:""), title:"",
-      items:[{desc:"",price:""}], styleImages:[], payments:[], dueDate:"", status:"Pending", notes:"", custom:{}, createdAt: todayISO()
+      items:[{desc:"",price:""}], styleImages:[], payments:[], dueDate:"",
+      status: kind==="quote" ? "Draft" : "Pending", kind: kind==="quote" ? "quote" : "order",
+      discountType:"percent", discountValue:0, taxPercent: billing.defaultTaxPercent||0,
+      notes:"", custom:{}, createdAt: todayISO()
     }};
   if(!state.modal.draft.custom) state.modal.draft.custom = {};
   pushNav();
@@ -3248,7 +4198,7 @@ document.addEventListener("click", (e) => {
       closeModal();
       break;
     }
-    case "open-order-modal-new": openOrderModal(null); break;
+    case "open-order-modal-new": openOrderModal(null, null, el.getAttribute("data-kind")); break;
     case "open-order-modal-new-for-client": openOrderModal(null, id); break;
     case "open-order-modal": openOrderModal(findOrder(id)); break;
     case "open-notifications": state.modal = { type:"notifications" }; pushNav(); render(); break;
@@ -3290,34 +4240,68 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "remove-payment": state.modal.draft.payments = state.modal.draft.payments.filter(p=>p.id!==id); render(); break;
-    case "save-order": {
-      const o = state.modal.draft;
-      if(!o.clientId) return;
-      o.items = o.items.filter(it => (it.desc && it.desc.trim()) || Number(it.price)>0);
-      if(o.items.length===0) o.items = [{desc:"",price:0}];
-      const existingOrder = state.orders.find(x=>x.id===o.id);
-      const exists = !!existingOrder;
-      if(!o.history) o.history = existingOrder && existingOrder.history ? existingOrder.history.slice() : [];
-      if(!exists || !existingOrder || existingOrder.status !== o.status){
-        o.history.push({status:o.status, at:new Date().toISOString()});
+    case "save-order": if(saveOrderDraft()) closeModal(); break;
+    case "generate-recurring-from-modal": {
+      const saved = saveOrderDraft();
+      if(saved && saved.recurring && saved.recurring.enabled){
+        generateRecurringInvoice(saved);
+        alert("Generated the next invoice. Next renewal is due "+fmtDate(saved.recurring.nextDate)+".");
       }
-      state.orders = exists ? state.orders.map(x=>x.id===o.id?o:x) : state.orders.concat([o]);
-      persistOrders();
       closeModal();
       break;
     }
-    case "delete-order": if(confirm("Delete this order?")){ const o=state.modal.draft; state.orders = state.orders.filter(x=>x.id!==o.id); persistOrders(); closeModal(); } break;
+    case "delete-order": if(confirm("Delete this "+(isQuoteRecord(state.modal.draft)?"quote":"order")+"?")){ const o=state.modal.draft; state.orders = state.orders.filter(x=>x.id!==o.id); persistOrders(); closeModal(); } break;
     case "duplicate-order": {
       const src = state.modal.draft;
       const copy = JSON.parse(JSON.stringify(src));
       copy.id = uid();
-      copy.status = "Pending";
+      copy.status = statusesFor(recordKind(copy))[0].key;
       copy.payments = [];
       copy.createdAt = todayISO();
       copy.dueDate = "";
-      copy.history = [{status:"Pending", at:new Date().toISOString()}];
+      copy.invoiceNo = null; copy.receiptNo = null; copy.quoteNo = null;
+      copy.recurring = null; copy.seriesId = null;
+      copy.history = [{status:copy.status, at:new Date().toISOString()}];
       closeModal();
       openOrderModal(copy);
+      break;
+    }
+    case "generate-recurring": {
+      const o = findOrder(id);
+      if(o && o.recurring && o.recurring.enabled){
+        generateRecurringInvoice(o);
+        render();
+      }
+      break;
+    }
+    case "switch-draft-kind": {
+      const newKind = el.getAttribute("data-kind");
+      state.modal.draft.kind = newKind==="quote" ? "quote" : "order";
+      state.modal.draft.status = statusesFor(state.modal.draft.kind)[0].key;
+      render();
+      break;
+    }
+    case "convert-quote-to-order": {
+      if(confirm("Convert this quote to an order? It will move to your Orders list.")){
+        const o = state.modal.draft;
+        o.kind = "order";
+        o.status = currentStatuses()[0].key;
+        o.quoteConvertedAt = new Date().toISOString();
+        if(!o.history) o.history = [];
+        o.history.push({status:o.status, at:new Date().toISOString()});
+        const exists = state.orders.find(x=>x.id===o.id);
+        state.orders = exists ? state.orders.map(x=>x.id===o.id?o:x) : state.orders.concat([o]);
+        persistOrders();
+        state.orderKind = "order";
+        closeModal();
+      }
+      break;
+    }
+    case "set-order-kind-view": {
+      state.orderKind = el.getAttribute("data-kind")==="quote" ? "quote" : "order";
+      state.orderFilterStatus = "All";
+      state.orderBalanceOnly = false;
+      render();
       break;
     }
     case "filter-orders": state.orderFilterStatus = el.getAttribute("data-status"); render(); break;
@@ -3344,8 +4328,8 @@ document.addEventListener("click", (e) => {
       persistOrders(); render();
       break;
     }
-    case "dash-kpi-outstanding": state.tab = "orders"; state.orderFilterStatus = "All"; state.orderBalanceOnly = true; pushNav(); render(); break;
-    case "dash-kpi-active": state.tab = "orders"; state.orderFilterStatus = "All"; state.orderBalanceOnly = false; pushNav(); render(); break;
+    case "dash-kpi-outstanding": state.tab = "orders"; state.orderKind = "order"; state.orderFilterStatus = "All"; state.orderBalanceOnly = true; pushNav(); render(); break;
+    case "dash-kpi-active": state.tab = "orders"; state.orderKind = "order"; state.orderFilterStatus = "All"; state.orderBalanceOnly = false; pushNav(); render(); break;
 
     case "select-category": state.activeCategoryId = id; render(); break;
     case "add-category": {
@@ -3427,6 +4411,91 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "delete-catitem": if(confirm("Delete this item?")){ const it=state.modal.draft; state.catalogue.items = state.catalogue.items.filter(x=>x.id!==it.id); persistCatalogue(); closeModal(); } break;
+
+    case "open-inv-modal-new": openInvItemModal(null); break;
+    case "open-inv-modal": openInvItemModal(findInvItem(id)); break;
+    case "save-inv-item": {
+      const it = state.modal.draft;
+      if(!it.name.trim()) return;
+      it.qtyOnHand = Number(it.qtyOnHand)||0;
+      it.reorderLevel = Number(it.reorderLevel)||0;
+      it.costPrice = it.costPrice===""?"":(Number(it.costPrice)||0);
+      it.sellPrice = it.sellPrice===""?"":(Number(it.sellPrice)||0);
+      it.updatedAt = new Date().toISOString();
+      const exists = state.inventory.items.some(x=>x.id===it.id);
+      state.inventory.items = exists ? state.inventory.items.map(x=>x.id===it.id?it:x) : state.inventory.items.concat([it]);
+      persistInventory(); closeModal();
+      break;
+    }
+    case "delete-inv-item": {
+      const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
+      if(delId && confirm("Delete this stock item? Its movement history will also be removed. This cannot be undone.")){
+        state.inventory.items = state.inventory.items.filter(x=>x.id!==delId);
+        state.inventory.movements = state.inventory.movements.filter(m=>m.itemId!==delId);
+        persistInventory();
+        if(state.modal && state.modal.type==="invitem") closeModal(); else render();
+      }
+      break;
+    }
+    case "open-stockmove-modal": openStockMoveModal(id, el.getAttribute("data-type")); break;
+    case "save-stockmove": {
+      const item = findInvItem(state.modal.itemId);
+      const form = state.modal.form;
+      if(!item || !form.qty || Number(form.qty)===0) return;
+      applyStockMovement(item, form.type, form.qty, form.note);
+      persistInventory();
+      closeModal();
+      break;
+    }
+    case "select-inventory-view": state.inventoryView = el.getAttribute("data-view"); render(); break;
+    case "select-inventory-filter": state.inventoryFilter = el.getAttribute("data-filter"); render(); break;
+    case "open-inventory-filtered":
+      state.tab = "inventory"; state.inventoryView = "items"; state.inventoryFilter = el.getAttribute("data-filter")||"all";
+      render();
+      break;
+
+    case "select-books-view": state.booksView = el.getAttribute("data-view"); render(); break;
+    case "select-books-period": state.booksPeriod = el.getAttribute("data-period"); render(); break;
+    case "open-vendor-modal-new": openVendorModal(null); break;
+    case "open-vendor-modal": openVendorModal(findVendor(id)); break;
+    case "save-vendor": {
+      const v = state.modal.draft;
+      if(!v.name.trim()) return;
+      const exists = state.vendors.some(x=>x.id===v.id);
+      state.vendors = exists ? state.vendors.map(x=>x.id===v.id?v:x) : state.vendors.concat([v]);
+      persistVendors(); closeModal();
+      break;
+    }
+    case "delete-vendor": {
+      const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
+      if(delId && confirm("Delete this vendor? Expenses already logged against them will be kept but unlinked.")){
+        state.vendors = state.vendors.filter(x=>x.id!==delId);
+        state.expenses.forEach(e=>{ if(e.vendorId===delId) e.vendorId=""; });
+        persistVendors(); persistExpenses();
+        if(state.modal && state.modal.type==="vendor") closeModal(); else render();
+      }
+      break;
+    }
+    case "open-expense-modal-new": openExpenseModal(null); break;
+    case "open-expense-modal": openExpenseModal(findExpense(id)); break;
+    case "save-expense": {
+      const ex = state.modal.draft;
+      if(!ex.amount || Number(ex.amount)<=0){ alert("Enter an amount for this expense."); return; }
+      ex.amount = Number(ex.amount)||0;
+      const exists = state.expenses.some(x=>x.id===ex.id);
+      state.expenses = exists ? state.expenses.map(x=>x.id===ex.id?ex:x) : state.expenses.concat([ex]);
+      persistExpenses(); closeModal();
+      break;
+    }
+    case "delete-expense": {
+      const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
+      if(delId && confirm("Delete this expense? This cannot be undone.")){
+        state.expenses = state.expenses.filter(x=>x.id!==delId);
+        persistExpenses();
+        if(state.modal && state.modal.type==="expense") closeModal(); else render();
+      }
+      break;
+    }
     case "select-browse-category": 
       state.browseCategoryId = el.tagName==="SELECT" ? el.value : el.getAttribute("data-id"); 
       render(); 
@@ -3652,6 +4721,42 @@ document.addEventListener("click", (e) => {
       persistBusiness(); render();
       break;
     }
+    case "set-signature-mode": {
+      if(!state.business.signature) state.business.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
+      state.business.signature.mode = el.getAttribute("data-mode");
+      state.sigRedrawing = false;
+      persistBusiness(); render();
+      break;
+    }
+    case "set-signature-font": {
+      state.business.signature.font = el.getAttribute("data-font");
+      persistBusiness(); render();
+      break;
+    }
+    case "clear-signature-canvas": {
+      const canvas = document.getElementById("sigCanvas");
+      if(canvas){ const ctx = canvas.getContext("2d"); ctx.clearRect(0,0,canvas.width,canvas.height); canvas.dataset.hasDrawn = ""; }
+      break;
+    }
+    case "save-signature-canvas": {
+      const canvas = document.getElementById("sigCanvas");
+      if(!canvas || canvas.dataset.hasDrawn !== "1"){ alert("Please draw your signature first."); break; }
+      state.business.signature.image = canvas.toDataURL("image/png");
+      state.business.signature.mode = "draw";
+      state.sigRedrawing = false;
+      persistBusiness(); render();
+      break;
+    }
+    case "start-signature-redraw": state.sigRedrawing = true; render(); break;
+    case "cancel-signature-redraw": state.sigRedrawing = false; render(); break;
+    case "remove-signature": {
+      if(confirm("Remove your saved signature?")){
+        state.business.signature.image = null;
+        state.sigRedrawing = false;
+        persistBusiness(); render();
+      }
+      break;
+    }
     case "export-data": exportBackup(); break;
     case "reset-app-data": {
       const ok1 = confirm("Reset BizHub to its default state? This permanently deletes every "+nounFor("client").toLowerCase()+", "+nounFor("record").toLowerCase()+", "+nounFor("catalogue").toLowerCase()+" item, business profile, and setting stored on this device. Export a backup first if you might need this data again.");
@@ -3718,7 +4823,7 @@ function downloadCsv(filename, rows){
 function exportClientsCsv(){
   const rows = [["Name","Phone","Address","Gender","Notes","Total spent","Orders"]];
   state.clients.forEach(c=>{
-    const clientOrders = state.orders.filter(o=>o.clientId===c.id);
+    const clientOrders = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o));
     const total = clientOrders.reduce((s,o)=>s+orderTotal(o),0);
     rows.push([c.name, c.phone||"", c.address||"", c.gender||"", c.notes||"", total, clientOrders.length]);
   });
@@ -3726,7 +4831,7 @@ function exportClientsCsv(){
 }
 function exportOrdersCsv(){
   const rows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
-  state.orders.forEach(o=>{
+  state.orders.filter(isRealOrder).forEach(o=>{
     const client = state.clients.find(c=>c.id===o.clientId);
     const total = orderTotal(o), paid = orderPaid(o);
     rows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
@@ -3736,7 +4841,7 @@ function exportOrdersCsv(){
 function shareBackupFile(){
   const backup = {
     app: "BizHub", version: 1, exportedAt: new Date().toISOString(),
-    clients: state.clients, orders: state.orders, catalogue: state.catalogue,
+    clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
   };
   const stamp = new Date().toISOString().slice(0,10);
@@ -3748,7 +4853,7 @@ function shareBackupFile(){
 function exportBackup(){
   const backup = {
     app: "BizHub", version: 1, exportedAt: new Date().toISOString(),
-    clients: state.clients, orders: state.orders, catalogue: state.catalogue,
+    clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
@@ -4200,17 +5305,20 @@ function importBackup(file){
     try{
       const data = JSON.parse(reader.result);
       if(!data || typeof data !== "object") throw new Error("bad file");
-      const ok = confirm("Import this backup? This will replace all clients, orders, catalogue and settings currently on this device.");
+      const ok = confirm("Import this backup? This will replace all clients, orders, catalogue, stock, vendors, expenses and settings currently on this device.");
       if(!ok) return;
       if(Array.isArray(data.clients)) state.clients = data.clients;
       if(Array.isArray(data.orders)) state.orders = data.orders;
       if(data.catalogue && typeof data.catalogue === "object") state.catalogue = data.catalogue;
+      if(data.inventory && typeof data.inventory === "object") state.inventory = data.inventory;
+      if(Array.isArray(data.vendors)) state.vendors = data.vendors;
+      if(Array.isArray(data.expenses)) state.expenses = data.expenses;
       if(data.business && typeof data.business === "object") state.business = Object.assign({}, state.business, data.business);
       if(!state.business.bankAccounts) state.business.bankAccounts = [];
       if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
       state.darkMode = !!data.darkMode;
       if(data.theme) applyTheme(data.theme); else applyTheme(state.theme||"indigo");
-      persistClients(); persistOrders(); persistCatalogue(); persistBusiness(); persist("theme", state.theme||"indigo");
+      persistClients(); persistOrders(); persistCatalogue(); persistInventory(); persistVendors(); persistExpenses(); persistBusiness(); persist("theme", state.theme||"indigo");
       persist("darkMode", state.darkMode); if(state.customThemeColors) persist("customThemeColors", state.customThemeColors);
       state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
       render();
@@ -4229,7 +5337,12 @@ document.addEventListener("input", (e) => {
     if(state.viewOnly && !path.startsWith("authForm.")){ showViewOnlyToast(); e.target.value = getPath(state, path) || ""; return; }
     setPath(state, path, e.target.value);
     if(path.startsWith("business.")) persistBusiness();
-    if(/^modal\.draft\.items\.\d+\.price$/.test(path)) updateOrderTotalsInline();
+    if(path === "business.signature.text"){
+      const preview = document.getElementById("sigTypedPreview");
+      if(preview) preview.textContent = e.target.value;
+      else render();
+    }
+    if(/^modal\.draft\.items\.\d+\.price$/.test(path) || path==="modal.draft.discountValue" || path==="modal.draft.taxPercent") updateOrderTotalsInline();
     if(path === "modal.draft.name"){
       const btn = document.getElementById("modalSaveBtn");
       if(btn) btn.disabled = !e.target.value.trim();
@@ -4261,6 +5374,12 @@ document.addEventListener("input", (e) => {
     if(wrap) wrap.innerHTML = catalogueResultsHtml();
     return;
   }
+  if(e.target.matches('[data-action="search-inventory"]')){
+    state.inventorySearch = e.target.value;
+    const wrap = document.getElementById("inventoryItemsWrap");
+    if(wrap) wrap.innerHTML = inventoryItemsHtml();
+    return;
+  }
   if(e.target.matches('[data-action="global-search-input"]')){ state.globalSearchQ = e.target.value; 
     // Update search results without full render to preserve keyboard state
     const resultsDiv = document.getElementById("globalSearchResults");
@@ -4290,8 +5409,13 @@ document.addEventListener("input", (e) => {
 function updateOrderTotalsInline(){
   if(!state.modal || state.modal.type!=="order") return;
   const o = state.modal.draft, business = state.business;
+  const sub = orderSubtotal(o), discount = orderDiscountAmount(o), tax = orderTaxAmount(o);
   const total = orderTotal(o), paid = orderPaid(o), bal = total-paid;
+  const sEl=document.getElementById("ordSubVal"), dEl=document.getElementById("ordDiscVal"), xEl=document.getElementById("ordTaxVal");
   const tEl=document.getElementById("ordTotalVal"), pEl=document.getElementById("ordPaidVal"), bEl=document.getElementById("ordBalanceVal");
+  if(sEl) sEl.textContent = money(sub, business.currency);
+  if(dEl) dEl.textContent = "-"+money(discount, business.currency);
+  if(xEl) xEl.textContent = money(tax, business.currency);
   if(tEl) tEl.textContent = money(total, business.currency);
   if(pEl) pEl.textContent = money(paid, business.currency);
   if(bEl){ bEl.textContent = money(bal, business.currency); bEl.style.color = bal>0 ? "var(--rust)" : "var(--green)"; }
@@ -4320,6 +5444,30 @@ document.addEventListener("change", (e) => {
     render();
     return;
   }
+  if(e.target.matches('[data-action="toggle-signature-invoice"]')){
+    if(!state.business.signature) state.business.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
+    if(state.viewOnly){ showViewOnlyToast(); e.target.checked = state.business.signature.showOnInvoice!==false; return; }
+    state.business.signature.showOnInvoice = e.target.checked;
+    persistBusiness(); render();
+    return;
+  }
+  if(e.target.matches('[data-action="toggle-signature-receipt"]')){
+    if(!state.business.signature) state.business.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
+    if(state.viewOnly){ showViewOnlyToast(); e.target.checked = state.business.signature.showOnReceipt!==false; return; }
+    state.business.signature.showOnReceipt = e.target.checked;
+    persistBusiness(); render();
+    return;
+  }
+  if(e.target.matches('[data-action="toggle-order-recurring"]')){
+    if(!state.modal || !state.modal.draft) return;
+    if(!state.modal.draft.recurring) state.modal.draft.recurring = { enabled:false, frequency:"monthly", intervalDays:30, nextDate:"" };
+    state.modal.draft.recurring.enabled = e.target.checked;
+    if(state.modal.draft.recurring.enabled && !state.modal.draft.recurring.nextDate){
+      state.modal.draft.recurring.nextDate = state.modal.draft.dueDate || advanceRecurringDate(todayISO(), state.modal.draft.recurring);
+    }
+    render();
+    return;
+  }
   const bindEl = e.target.closest("[data-bind]");
   if(bindEl && bindEl.hasAttribute("data-rerender")){
     const path = bindEl.getAttribute("data-bind");
@@ -4343,6 +5491,19 @@ document.addEventListener("change", (e) => {
   if(e.target.matches('[data-action="upload-logo"]')){
     const f = e.target.files && e.target.files[0];
     if(f){ resizeImage(f, 300, 0.82).then(url => { state.business.logo = url; persistBusiness(); render(); }); }
+    return;
+  }
+  if(e.target.matches('[data-action="upload-signature-image"]')){
+    const f = e.target.files && e.target.files[0];
+    if(f){
+      if(!state.business.signature) state.business.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
+      resizeImage(f, 400, 0.85).then(url => {
+        state.business.signature.image = url;
+        state.business.signature.mode = "draw";
+        state.sigRedrawing = false;
+        persistBusiness(); render();
+      });
+    }
     return;
   }
   if(e.target.matches('[data-action="upload-images"]')){
