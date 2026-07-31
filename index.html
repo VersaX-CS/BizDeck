@@ -206,6 +206,7 @@
     font-family:'Fraunces',serif;font-weight:600;font-size:22px;overflow:hidden;}
   .welcome-logo img{width:100%;height:100%;object-fit:cover;}
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
   /* ================= GUIDED TOUR ================= */
   #tourOverlay{position:fixed;inset:0;z-index:9999;}
@@ -282,6 +283,59 @@ const ICONS = {
   ledger:'<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18v18H6.5A1.5 1.5 0 0 1 5 19.5v-15z"/><path d="M8 3v18"/><path d="M11 8h5M11 11.5h5"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
+
+/* ================= SECURITY & AUTH ================= */
+function generateAccessKey(){
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let key = '';
+  for(let i=0;i<24;i++){
+    key += chars.charAt(Math.floor(Math.random()*chars.length));
+    if((i+1)%6===0 && i<23) key += '-';
+  }
+  return key;
+}
+function validateAccessKey(key, email, password){
+  if(!state.auth) return false;
+  const hash = simpleHash(email.toLowerCase() + password);
+  return state.auth.keyHash === hash;
+}
+function simpleHash(str){
+  let hash = 0;
+  for(let i=0;i<str.length;i++){
+    const char = str.charCodeAt(i);
+    hash = ((hash<<5)-hash)+char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+function createLicense(){
+  return {
+    email: (state.account && state.account.email) || DEMO_EMAIL,
+    keyHash: state.auth ? state.auth.keyHash : simpleHash(DEMO_EMAIL + DEMO_PASSWORD),
+    created: new Date().toISOString(),
+    version: "1.0"
+  };
+}
+function notifyBeforeTour(){
+  if(!state.tourNotified && state.authed){
+    const ok = confirm("👋 Welcome to your account! Would you like a guided tour of the app features? (You can replay it anytime from Account settings.)");
+    state.tourNotified = true;
+    if(ok){
+      state.tour = true;
+      state.tourIndex = 0;
+    }
+    render();
+  }
+}
+function notifyBeforeClose(){
+  window.addEventListener('beforeunload', (e) => {
+    if(state.authed && !state.viewOnly && state.account){
+      e.preventDefault();
+      e.returnValue = '⚠️ Before you go: Have you exported a backup recently? Your data is stored only on this device. Click "Stay" and export a backup from Account > Backup & transfer for safety.';
+      return e.returnValue;
+    }
+  });
+}
 
 /* ================= HELPERS ================= */
 const THEMES = {
@@ -1246,9 +1300,11 @@ async function loadAll(){
     const acc = localStorage.getItem("account");
     const bkS = localStorage.getItem("backupSettings");
     const bizCat = localStorage.getItem("businessCategory");
+    const auth = localStorage.getItem("auth");
     if(bizCat && CATEGORY_CONFIG[bizCat]) state.businessCategory = bizCat;
     state.universalAccess = localStorage.getItem("universalAccess") === "1";
     if(acc) state.account = JSON.parse(acc);
+    if(auth) state.auth = JSON.parse(auth);
     // Migration: any install that already has an account or saved data but no
     // locked category predates the bundle — it was always the tailoring app.
     if(!state.businessCategory && (acc || c || o || cat || b)){
@@ -1302,6 +1358,10 @@ async function loadAll(){
   }
   state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
   state.loaded = true;
+  
+  // Initialize notifications
+  notifyBeforeClose();
+  
   render();
 }
 let persistTimers = {};
@@ -1318,6 +1378,7 @@ const persistExpenses = () => persist("expenses", state.expenses);
 const persistBusiness = () => persist("business", state.business);
 const persistBackupSettings = () => persist("backupSettings", state.backupSettings);
 const persistAccount = () => persist("account", state.account);
+const persistAuth = () => persist("auth", state.auth);
 
 /* ================= FINGERPRINT (WEBAUTHN) SIGN-IN ================= */
 let biometricAutoAttempted = false;
@@ -2858,6 +2919,17 @@ function renderAccount(){
   const logoHtml = b.logo ? '<img src="'+b.logo+'" alt="Business logo">' : icon("upload",20);
   return (
     '<div class="disp" style="font-size:19px;font-weight:600;margin-bottom:16px;">Account</div>'+
+    (state.account && state.auth ? 
+      '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
+        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials</div>'+
+        '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Your unique access key (tied to your email & password). Use this with exported account backups to restore your account on a new device.</div>'+
+        '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show Access Key</button>'+
+          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy to clipboard</button>'+
+        '</div>'+
+      '</div>'
+    : '')+
     '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
       '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Need a refresher?</div>'+
         '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Replay the guided tour of the app anytime.</div></div>'+
@@ -2966,9 +3038,20 @@ function renderAccount(){
     '</div>'+
     '<div class="card" style="margin-top:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup &amp; transfer</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Your data is stored only on this device. Export a backup file regularly, or use it to move your clients, orders and catalogue to another device.</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Your data is stored only on this device. <strong style="color:var(--ink);">⚠️ Export a backup file regularly for safety.</strong> Use it to move your account to another device.</div>'+
+      '<div style="background:var(--rust-soft);border-left:4px solid var(--rust);padding:10px;border-radius:4px;margin-bottom:12px;font-size:12px;color:var(--rust);">'+
+        '<strong>Security Notice:</strong> Account backups include your credentials and are tied to your email & password. Keep them secure. Recommended: Save backups in a secure location and delete them after restoring to a new device.'+
+      '</div>'+
+      '<div style="font-size:12.5px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Recommended: Account backup with credentials</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+        '<button class="btn gold sm" data-action="export-with-license">'+icon("download",14)+' Export account backup</button>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import account backup'+
+          '<input type="file" accept=".bizhub" data-action="import-from-file" style="display:none;">'+
+        '</label>'+
+      '</div>'+
+      '<div style="font-size:12.5px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backups (data only)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export backup</button>'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export backup (no credentials)</button>'+
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import backup'+
           '<input type="file" accept="application/json" data-action="import-data-file" style="display:none;">'+
         '</label>'+
@@ -3045,6 +3128,7 @@ function renderModal(){
   if(state.modal.type==="custom-theme") return renderCustomThemeModal();
   if(state.modal.type==="contact-dev") return renderContactDevModal();
   if(state.modal.type==="upgrade-access") return renderUpgradeAccessModal();
+  if(state.modal.type==="import-license") return renderImportLicenseModal();
   return "";
 }
 function modalShell(title, bodyHtml, variant){
@@ -3058,7 +3142,8 @@ function modalShell(title, bodyHtml, variant){
 function policyBodyHtml(){
   return '<div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">'+
     '<p style="margin:0 0 10px;">All data you enter — '+esc(nounFor("clientPlural")).toLowerCase()+', '+esc(nounFor("recordPlural")).toLowerCase()+', '+esc(nounFor("catalogue")).toLowerCase()+' items and photos — is stored only on this device\u2019s local storage. Nothing is sent to '+esc(DEV_STUDIO)+' or any external server.</p>'+
-    '<p style="margin:0 0 10px;">Because it lives only on this device, uninstalling the app, clearing browser data, or losing the device can permanently erase it. Use Account &gt; Backup &amp; transfer to export a backup regularly or move data to another device.</p>'+
+    '<p style="margin:0 0 10px;padding:8px 12px;background:var(--gold-soft);border-radius:6px;color:var(--rust);border-left:4px solid var(--rust);"><strong>⚠️ BACKUP YOUR DATA REGULARLY:</strong> Because your data lives only on this device, uninstalling the app, clearing browser data, or losing the device can permanently erase everything. <strong>Export a backup every week or after major changes</strong> via Account &gt; Backup &amp; transfer. This is your responsibility and your only protection against data loss.</p>'+
+    '<p style="margin:0 0 10px;"><strong style="color:var(--ink);">Account transfer to a new device:</strong> If you switch devices, use your account access key (shown in Account settings) with the "Export account backup" feature to securely transfer your full account, including all credentials. Import the backup on your new device using your email and password to restore everything.</p>'+
     '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Access levels</p>'+
     '<p style="margin:0 0 10px;">Signing up needs an access key, and there are two kinds:</p>'+
     '<ul style="margin:0 0 10px;padding-left:18px;">'+
@@ -3066,8 +3151,9 @@ function policyBodyHtml(){
       '<li><strong style="color:var(--ink);">Universal key</strong> — unlocks every business module on the same account, with a switcher in Account to move between them at any time. The underlying data (clients, orders, catalogue) is shared across whichever module is active; only the labels, statuses and extra fields shown change.</li>'+
     '</ul>'+
     '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Responsibility &amp; indemnity</p>'+
-    '<p style="margin:0 0 10px;">You are solely responsible for the accuracy of the business, pricing and client information you enter, for how you use it with your clients, and for keeping your own backups. To the fullest extent permitted by law, you agree to indemnify and hold harmless '+esc(DEV_STUDIO)+' and '+esc(DEV_NAME)+' from any claim, loss, liability, or dispute — including with your own clients or customers — arising from your use of the app, data you enter or lose, or decisions made based on it. The app is provided as-is, with no warranty of uninterrupted or error-free operation.</p>'+
-    '<p style="margin:0;">Questions about this note? Reach out using the Contact the developer details below.</p>'+
+    '<p style="margin:0 0 10px;">You are solely responsible for the accuracy of the business, pricing and client information you enter, for how you use it with your clients, for keeping regular backups, and for the consequences of data loss. To the fullest extent permitted by law, you agree to indemnify and hold harmless '+esc(DEV_STUDIO)+' and '+esc(DEV_NAME)+' from any claim, loss, liability, or dispute — including with your own clients or customers — arising from your use of the app, data you enter or lose (whether by accident, device loss, or app malfunction), decisions made based on it, or your failure to keep backups. The app is provided as-is, with no warranty of uninterrupted, error-free, or loss-proof operation.</p>'+
+    '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Notifications on signup and exit</p>'+
+    '<p style="margin:0;">When you create a new account, you\u2019ll be asked if you\u2019d like a guided tour before we show the app. When you\u2019re about to leave the app (close the tab or browser), a reminder about backups will appear — take the moment to export one if it\u2019s been a while.</p>'+
   '</div>';
 }
 function renderContactDevModal(){
@@ -3113,6 +3199,34 @@ function renderUpgradeAccessModal(){
     '<div style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px;font-size:11.5px;color:var(--ink-soft);text-align:center;">'+
       'Don\'t have a premium key yet?<br>'+
       '<span data-action="open-contact-dev-modal" style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Contact the developer</span>'+
+    '</div>'
+  );
+}
+
+function renderImportLicenseModal(){
+  const data = state.modal?.data || {};
+  const importForm = state.importForm || {};
+  
+  return modalShell("🔐 Restore Your Account",
+    '<div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">'+
+      '<p style="margin:0 0 10px;">Found a backup file with your account credentials!</p>'+
+      '<p style="margin:0 0 10px;"><strong style="color:var(--ink);">Email:</strong> '+esc(data.license?.email || "")+'</p>'+
+      '<p style="margin:0;">Enter your password to restore your full account, including all clients, orders, and catalogue settings.</p>'+
+    '</div>'+
+    '<div style="background:var(--gold-soft);border-left:4px solid var(--gold);padding:12px;border-radius:4px;margin-bottom:14px;font-size:12px;color:var(--ink);">'+
+      '<strong>⚠️ Important:</strong> Your email cannot be changed after account creation. This import will restore your account linked to '+esc(data.license?.email || "")+'.'+
+    '</div>'+
+    '<div style="margin-bottom:14px;">'+
+      '<label>Email</label>'+
+      '<input value="'+esc(data.license?.email || "")+'" disabled style="background:var(--line);color:var(--ink-soft);">'+
+    '</div>'+
+    '<div style="margin-bottom:14px;">'+
+      '<label>Password</label>'+
+      '<input type="password" data-bind="importForm.password" value="'+esc(importForm.password||"")+'" placeholder="Enter your account password">'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn gold" style="flex:1;min-width:120px;justify-content:center;" data-action="complete-import">'+icon("check",15)+' Restore Account</button>'+
+      '<button class="btn ghost" style="flex:1;min-width:120px;justify-content:center;" data-action="close-modal">Cancel</button>'+
     '</div>'
   );
 }
@@ -3912,6 +4026,23 @@ function openCatItemModal(existing, catId){
   pushNav();
   render();
 }
+function showToast(message, type){
+  // Simple toast notification
+  type = type || "info";
+  const toastId = "toast-" + Date.now();
+  const bgColor = type === "error" ? "var(--rust)" : type === "success" ? "var(--green)" : "var(--primary)";
+  const textColor = "#fff";
+  const toast = document.createElement("div");
+  toast.id = toastId;
+  toast.style.cssText = `position:fixed;bottom:20px;left:20px;right:20px;max-width:400px;background:${bgColor};color:${textColor};padding:12px 16px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:slideUp 0.3s ease-out;`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    const el = document.getElementById(toastId);
+    if(el) el.remove();
+  }, 3000);
+}
+
 function closeModal(){
   if(state.pendingModal){ state.modal = state.pendingModal; state.pendingModal = null; }
   else { state.modal = null; }
@@ -4630,6 +4761,18 @@ document.addEventListener("click", (e) => {
         persistClients(); persistOrders(); persistCatalogue(); persistBusiness();
         state.account = { name, email, password };
         persistAccount();
+        
+        // Generate access key tied to email & password
+        const accessKey = generateAccessKey();
+        const keyHash = simpleHash(email + password);
+        state.auth = {
+          accessKey: accessKey,
+          keyHash: keyHash,
+          email: email,
+          created: new Date().toISOString()
+        };
+        persistAuth();
+        
         state.businessCategory = state.pendingCategory || "tailoring";
         state.pendingCategory = null;
         persistBusinessCategory();
@@ -4638,9 +4781,14 @@ document.addEventListener("click", (e) => {
         persistUniversalAccess();
         state.authed = true; state.authError = null; state.authMode = "signin"; state.viewOnly = false;
         state.authForm = null;
+        state.tourNotified = false;
+        
         if(supportsWebAuthn()){
           setTimeout(() => { if(confirm("Enable fingerprint sign-in on this device for next time?")) registerBiometric(); }, 300);
         }
+        
+        // Show notification before tour
+        setTimeout(() => notifyBeforeTour(), 600);
       }
       render();
       break;
@@ -4804,6 +4952,10 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
+    case "complete-import": {
+      completeImportWithCredentials();
+      break;
+    }
   }
 });
 
@@ -4863,6 +5015,117 @@ function exportBackup(){
   a.href = url; a.download = "bizhub-backup-"+stamp+".json";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function exportWithLicense(){
+  if(!state.account || !state.auth) {
+    showToast("No account credentials to export", "error");
+    return;
+  }
+  const backup = {
+    app: "BizHub", version: 1, exportedAt: new Date().toISOString(),
+    clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
+    business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
+    license: createLicense(),
+    accountName: state.account.name
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = "bizhub-account-"+state.account.email+"-"+stamp+".bizhub";
+  document.body.appendChild(a); a.click(); a.remove();
+  showToast("Account backup exported with credentials", "success");
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function importFromFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.license || !data.license.email) {
+        showToast("This file doesn't contain account credentials", "error");
+        return;
+      }
+      // Open modal to ask for email and password
+      state.modal = { 
+        type: "import-license",
+        data: data
+      };
+      render();
+    } catch(err) {
+      showToast("Failed to read file: " + err.message, "error");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function completeImportWithCredentials(){
+  const importForm = state.importForm || {};
+  const email = (importForm.email || "").trim().toLowerCase();
+  const password = importForm.password || "";
+  const data = state.modal?.data;
+  
+  if(!data || !data.license) {
+    showToast("Import data is missing", "error");
+    return;
+  }
+  
+  if(!email || !password) {
+    showToast("Please enter your email and password", "error");
+    return;
+  }
+  
+  // Validate credentials against the license
+  const enteredHash = simpleHash(email + password);
+  if(email !== data.license.email || enteredHash !== data.license.keyHash) {
+    showToast("Incorrect email or password for this account", "error");
+    return;
+  }
+  
+  // Restore account data
+  state.clients = data.clients || [];
+  state.orders = data.orders || [];
+  state.catalogue = data.catalogue || { categories: [], items: [] };
+  state.inventory = data.inventory;
+  state.vendors = data.vendors || [];
+  state.expenses = data.expenses || [];
+  state.business = data.business || { name: data.accountName || "My Business", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null };
+  if(data.theme) state.theme = data.theme;
+  if(typeof data.darkMode !== 'undefined') state.darkMode = data.darkMode;
+  if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
+  
+  state.account = { 
+    email: email, 
+    password: password,
+    name: data.accountName || "User"
+  };
+  
+  // Restore auth with same credentials
+  state.auth = {
+    email: email,
+    keyHash: enteredHash,
+    accessKey: data.license.accessKey || generateAccessKey(),
+    created: data.license.created
+  };
+  
+  // Persist everything
+  persistClients(); persistOrders(); persistCatalogue(); persistBusiness();
+  persistAccount(); persistAuth();
+  if(state.inventory) persistInventory();
+  if(state.vendors) persistVendors();
+  if(state.expenses) persistExpenses();
+  
+  // Set auth state
+  state.authed = true;
+  state.viewOnly = false;
+  state.authMode = "signin";
+  state.modal = null;
+  state.importForm = null;
+  
+  showToast("Account restored successfully!", "success");
+  render();
 }
 const AUTO_BACKUP_INTERVALS = { daily:1, weekly:7, monthly:30 };
 function nextAutoBackupDate(){
@@ -5523,6 +5786,44 @@ document.addEventListener("change", (e) => {
       const cat = state.catalogue.categories.find(c=>c.id===catId);
       if(cat){ urls.forEach(u=>cat.gallery.push(u)); persistCatalogue(); }
       render();
+    });
+    return;
+  }
+  if(e.target.matches('[data-action="toggle-access-key"]')){
+    const display = e.target.getAttribute("data-display");
+    const container = document.getElementById("accessKeyDisplay");
+    if(display === "hidden"){
+      container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+state.auth.accessKey+'</code>';
+      e.target.setAttribute("data-display", "shown");
+      e.target.textContent = "Hide Access Key";
+    } else {
+      container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
+      e.target.setAttribute("data-display", "hidden");
+      e.target.textContent = "Show Access Key";
+    }
+    return;
+  }
+  if(e.target.matches('[data-action="export-with-license"]')){
+    exportWithLicense();
+    return;
+  }
+  if(e.target.matches('[data-action="import-from-file"]')){
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".bizhub";
+    input.addEventListener("change", (ev) => {
+      const file = ev.target.files?.[0];
+      if(file) importFromFile(file);
+    });
+    input.click();
+    return;
+  }
+  if(e.target.matches('[data-action="copy-access-key"]')){
+    const key = state.auth.accessKey;
+    navigator.clipboard.writeText(key).then(()=>{
+      showToast("Access key copied to clipboard", "success");
+    }).catch(()=>{
+      showToast("Failed to copy access key", "error");
     });
     return;
   }
