@@ -1,7 +1,7 @@
 {
-  "name": "BizDeck",
-  "short_name": "BizDeck",
-  "description": "Business management",
+  "name": "BizHub",
+  "short_name": "BizHub",
+  "description": "Business management, expense tracking, loan tracking, thrift savings, and payment management.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
