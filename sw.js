@@ -1,12 +1,18 @@
 // Bump this string on every deploy (or leave as-is — the network-first
 // strategy below means most updates show up immediately regardless).
 const CACHE_VERSION = "v2";
-const CACHE_NAME = "tailor-studio-" + CACHE_VERSION;
+const CACHE_NAME = "bizdeck-" + CACHE_VERSION;
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./favicon-16.png",
+  "./favicon-32.png",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-512-maskable.png",
+  "./apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {
