@@ -262,6 +262,10 @@
   }
   .splash-name .biz{ color:#0c247f; }
   .splash-name .deck{ color:#0b62f0; }
+  .splash-tagline{
+    margin-top:6px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:600; font-size:12.5px;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft);
+  }
   .splash-dots{ display:flex; gap:7px; margin-top:20px; }
   .splash-dot{
     width:8px; height:8px; border-radius:50%; background:var(--gold);
@@ -302,6 +306,7 @@
 <div id="splashScreen">
   <img src="icon-512.png" alt="BizDeck" class="splash-logo">
   <div class="splash-name"><span class="biz">Biz</span><span class="deck">Deck</span></div>
+  <div class="splash-tagline">Manage. Track. Grow.</div>
   <div class="splash-dots">
     <span class="splash-dot"></span>
     <span class="splash-dot"></span>
@@ -3205,6 +3210,7 @@ function renderAccountGeneral(){
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
         '</label>'+
+        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-with-license">'+icon("send",14)+' Share</button>' : '')+
       '</div>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backup (data only)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -3239,8 +3245,12 @@ function renderAccountGeneral(){
       '</span>'+
       (supportsFSAccess() ?
         '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Tip: if backups fail into a Google Drive folder, open Google Drive for Desktop → Preferences and switch that folder from \"Stream files\" to \"Mirror files\" — streamed folders often block direct writes from apps like this.</div>'
-        : '')+
-      (!supportsFSAccess() ? '' :
+        : '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">On a phone there\'s no way for BizDeck to write straight into a Drive folder — Share hands the file to the Google Drive app, and you pick the destination folder there. If an upload into a chosen folder fails, that\'s happening inside the Drive app itself: check the Drive app has storage permission, that the folder still exists and isn\'t offline-only, and try picking the folder again from a fresh Drive upload rather than a remembered shortcut.</div>')+
+      (!supportsFSAccess() ?
+        (navigator.share ?
+          '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
+          : '<div style="font-size:12px;color:var(--ink-soft);">Sharing isn\'t available in this browser — use Export in Backup &amp; transfer below, then upload that file from the Drive app.</div>')
+        :
         !state.cloudBackup.connected ?
           '<button class="btn gold sm" data-action="connect-cloud-folder">'+icon("cloud",14)+' Choose cloud folder</button>'
         :
@@ -5175,6 +5185,7 @@ document.addEventListener("click", (e) => {
     case "export-csv-clients": exportClientsCsv(); break;
     case "export-csv-orders": exportOrdersCsv(); break;
     case "share-backup-file": shareBackupFile(); break;
+    case "share-backup-with-license": shareBackupWithLicense(); break;
     case "connect-cloud-folder": connectCloudFolder(); break;
     case "backup-to-cloud-now": backupToCloudFolder(false); break;
     case "disconnect-cloud-folder": disconnectCloudFolder(); break;
@@ -5362,6 +5373,26 @@ function exportWithLicense(){
   document.body.appendChild(a); a.click(); a.remove();
   showToast("Account backup exported with credentials", "success");
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Hands the .bizdeck file straight to the OS share sheet so it can go
+// directly into the Google Drive (or OneDrive/Dropbox) app on a phone,
+// instead of landing in Downloads and needing a manual move afterward —
+// that manual step is where uploads into a chosen Drive folder tend to
+// go wrong on mobile.
+function shareBackupWithLicense(){
+  if(!state.account || !state.auth) {
+    showToast("No account credentials to export", "error");
+    return;
+  }
+  const backup = Object.assign(buildBackupPayload(), {
+    license: createLicense(),
+    accountName: state.account.name
+  });
+  const stamp = new Date().toISOString().slice(0,10);
+  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
+  if(navigator.canShare && !navigator.canShare({files:[file]})){ exportWithLicense(); return; }
+  navigator.share({ files:[file], title:"BizDeck account backup" }).catch(()=>{});
 }
 
 /* ================= CLOUD FOLDER BACKUP =================
