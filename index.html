@@ -310,16 +310,33 @@
 
 <script>
 /* ================= SPLASH SCREEN ================= */
-const SPLASH_MIN_MS = 700;
+// Random splash screen duration between 3 and 5 seconds
+const SPLASH_MIN_MS = Math.floor(Math.random() * (5000 - 3000 + 1)) + 3000;
+
 const splashStartedAt = Date.now();
-function hideSplashScreen(){
+
+function hideSplashScreen() {
   const el = document.getElementById("splashScreen");
-  if(!el || el.dataset.hiding) return;
+
+  // Prevent running more than once
+  if (!el || el.dataset.hiding) return;
+
   el.dataset.hiding = "1";
+
+  // Wait until the minimum splash duration has elapsed
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartedAt));
+
   setTimeout(() => {
+    // Start the fade-out animation
     el.classList.add("splash-hide");
-    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 500);
+
+    // Remove the splash screen after the animation completes
+    setTimeout(() => {
+      if (el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    }, 500);
+
   }, wait);
 }
 /* ================= ICONS ================= */
