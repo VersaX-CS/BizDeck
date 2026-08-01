@@ -3036,27 +3036,23 @@ function initSignaturePad(){
 }
 
 /* ================= ACCOUNT ================= */
-function renderAccountSegmentBar(){
-  return '<div class="chipbar" style="margin-bottom:16px;">'+
-    '<button class="btn '+(state.accountView==="account"?"gold":"ghost")+' sm" data-action="set-account-view" data-view="account">'+icon("account",13)+' Account</button>'+
-    '<button class="btn '+(state.accountView==="general"?"gold":"ghost")+' sm" data-action="set-account-view" data-view="general">'+icon("moon",13)+' General</button>'+
-  '</div>';
-}
 function renderAccount(){
   return (
     '<div class="disp" style="font-size:19px;font-weight:600;margin-bottom:16px;">Account</div>'+
-    renderAccountSegmentBar()+
-    (state.accountView === "general" ? renderAccountGeneral() : renderAccountIdentity())
+    renderConsolidatedAccountSettings()
   );
 }
-function renderAccountIdentity(){
+
+function renderConsolidatedAccountSettings(){
   const b = state.business;
   const logoHtml = b.logo ? '<img src="'+b.logo+'" alt="Business logo">' : icon("upload",20);
+  
   return (
+    // ===== ACCOUNT CREDENTIALS & LICENSE =====
     (state.account && state.auth ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
-        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key + password</span>'+
+        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials & license</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key, password, and license document</span>'+
         '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
         '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
@@ -3066,92 +3062,70 @@ function renderAccountIdentity(){
         '</div>'+
         '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
         '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
           '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
           '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
           '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
         '</div>'+
-        '<div style="font-size:10.5px;color:var(--ink-soft);margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately, then delete from Downloads.</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">License document</div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account and license information</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+          '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
+          '<button class="btn ghost sm" data-action="view-license-modal">'+icon("eye",14)+' View details</button>'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately and delete from Downloads. Keep your password secure.</div>'+
       '</div>'
     : '')+
+    
     (!state.universalAccess && state.account ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(184,132,46,0.08) 0%, rgba(184,132,46,0.04) 100%);border:1.5px solid var(--gold);position:relative;overflow:hidden;">'+
         '<div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:var(--gold);opacity:0.08;border-radius:50%;"></div>'+
         '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:4px;color:var(--gold);">🚀 Upgrade to Premium</div>'+
         '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Currently: '+esc(activeCatCfg().label)+' only</span>'+
-        '<div style="font-size:13px;color:var(--ink);margin-bottom:12px;background:var(--surface);padding:10px;border-radius:8px;">'+
-          '✓ All 8 business modules<br>'+
-          '✓ Switch modules anytime<br>'+
-          '✓ Shared data across modules'+
-        '</div>'+
-        '<button class="btn gold" style="width:100%;justify-content:center;margin-bottom:8px;" data-action="open-upgrade-modal">'+icon("plus",14)+' Unlock Premium Access</button>'+
+        '<div style="font-size:13px;color:var(--ink);margin-bottom:12px;background:var(--surface);padding:10px;border-radius:8px;">✓ All 8 business modules<br>✓ Switch modules anytime<br>✓ Shared data across modules</div>'+
+        '<button class="btn gold" style="width:100%;justify-content:center;" data-action="open-upgrade-modal">'+icon("plus",14)+' Unlock Premium Access</button>'+
       '</div>'
     : '')+
+    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="business-profile">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:12px;">Business profile</div>'+
       '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">'+
         '<label class="logo-upload">'+logoHtml+'<input type="file" accept="image/*" data-action="upload-logo" style="display:none;"></label>'+
-        '<div><div style="font-size:13px;font-weight:500;">Business logo</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:4px;">Header + invoices</span></div>'+
+        '<div><div style="font-size:13px;font-weight:500;">Business logo</div><span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:4px;">Header + invoices</span></div>'+
       '</div>'+
       '<div class="grid-form2">'+
         '<div><label>Business name</label><input data-bind="business.name" value="'+esc(b.name)+'"></div>'+
         '<div><label>Phone</label><input data-bind="business.phone" value="'+esc(b.phone)+'"></div>'+
         '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
         '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
-        '<div><label>Registration number (CAC / RC no.)</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="RC 1234567"></div>'+
+        '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="RC 1234567"></div>'+
       '</div>'+
     '</div>'+
+    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="bank-details">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Bank account details</div>'+
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Shown on invoices</span>'+
       (b.bankAccounts||[]).map((acc,i) => (
-        '<div class="bank-entry">'+
-          '<button class="iconbtn" data-action="remove-bank-account" data-index="'+i+'" style="position:absolute;top:10px;right:10px;" aria-label="Remove">'+icon("x",13)+'</button>'+
-          '<div class="grid-form2">'+
-            '<div style="grid-column:1/-1;"><label>Bank / fintech name</label><select data-bind="business.bankAccounts.'+i+'.bankName"><option value="">Select a bank...</option>'+ NIGERIA_BANKS.map(n=>'<option value="'+esc(n)+'"'+(acc.bankName===n?' selected':'')+'>'+ esc(n)+'</option>').join("")+'</select></div>'+
-            '<div><label>Account name</label><input data-bind="business.bankAccounts.'+i+'.accountName" value="'+esc(acc.accountName)+'"></div>'+
-            '<div><label>Account number</label><input class="mono" data-bind="business.bankAccounts.'+i+'.accountNumber" value="'+esc(acc.accountNumber)+'"></div>'+
-          '</div>'+
-        '</div>'
+        '<div class="bank-entry"><button class="iconbtn" data-action="remove-bank-account" data-index="'+i+'" style="position:absolute;top:10px;right:10px;">'+icon("x",13)+'</button>'+
+        '<div class="grid-form2">'+
+          '<div style="grid-column:1/-1;"><label>Bank / fintech name</label><select data-bind="business.bankAccounts.'+i+'.bankName"><option value="">Select a bank...</option>'+ NIGERIA_BANKS.map(n=>'<option value="'+esc(n)+'"'+(acc.bankName===n?' selected':'')+'>'+ esc(n)+'</option>').join("")+'</select></div>'+
+          '<div><label>Account name</label><input data-bind="business.bankAccounts.'+i+'.accountName" value="'+esc(acc.accountName)+'"></div>'+
+          '<div><label>Account number</label><input class="mono" data-bind="business.bankAccounts.'+i+'.accountNumber" value="'+esc(acc.accountNumber)+'"></div>'+
+        '</div></div>'
       )).join("")+
       ((b.bankAccounts||[]).length===0 ? '<div class="empty" style="margin-bottom:10px;">No bank accounts added yet.</div>' : '')+
       '<button class="btn ghost sm" data-action="add-bank-account">'+icon("plus",14)+' Add another account</button>'+
     '</div>'+
+    
     renderSignatureCard(b)+
     renderBillingCard(b)+
-    '<div class="card" style="margin-top:16px;">'+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
       '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
     '</div>'+
-    '<div class="card" style="margin-top:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Contact the developer</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Support / bug report</span>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
-        '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I have a query/complaint about "+esc(b.name||"BizDeck")+": ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
-        '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
-        '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
-      '</div>'+
-      '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'<br>'+esc(DEV_EMAIL)+' · '+esc(DEV_PHONE)+'</div>'+
-      '<div style="border-top:1px solid var(--line);padding-top:12px;">'+
-        '<div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div>'+
-        '<div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">'+
-          esc(SUPPORT_BANK)+'<br>'+
-          esc(SUPPORT_ACCOUNT_NAME)+'<br>'+
-          '<span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span>'+
-        '</div>'+
-        '<button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy account number</button>'+
-      '</div>'+
-    '</div>'
-  );
-}
-function renderAccountGeneral(){
-  return (
-    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
-      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
-      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
-    '</div>'+
+    
     (state.universalAccess ?
       '<div class="card" style="margin-bottom:16px;">'+
         '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
@@ -3165,37 +3139,29 @@ function renderAccountGeneral(){
         '</div>'+
       '</div>'
     : '')+
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="manage-catalogue">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Manage catalogue</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Categories, items, photos</span>'+
-      renderCatalogueManager()+
+    
+    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
+      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
+      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
     '</div>'+
-    '<div class="card" data-tour-target="appearance">'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
       '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
         Object.keys(THEMES).filter(k=>k!=="custom").map(key => {
           const t = THEMES[key];
           const active = (state.theme||"indigo")===key;
-          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'">'+
-            '<span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span>'+
-            '<span class="swatch-label">'+t.label+'</span>'+
-          '</button>';
+          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'"><span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span><span class="swatch-label">'+t.label+'</span></button>';
         }).join("")+
         (state.customThemeColors ? (
-          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours">'+
-            '<span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span>'+
-            '<span class="swatch-label">My colours</span>'+
-            '<span data-action="open-custom-theme-modal" title="Edit personalized colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span>'+
-          '</div>'
+          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours"><span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span><span class="swatch-label">My colours</span><span data-action="open-custom-theme-modal" title="Edit colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span></div>'
         ) : (
-          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add a personalized colour">'+
-            '<span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span>'+
-            '<span class="swatch-label">Custom</span>'+
-          '</button>'
+          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add custom colour"><span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span><span class="swatch-label">Custom</span></button>'
         ))+
       '</div>'+
     '</div>'+
-    '<div class="card" style="margin-top:16px;" data-tour-target="dark-mode">'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="dark-mode">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
@@ -3204,17 +3170,22 @@ function renderAccountGeneral(){
         '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
       '</div>'+
     '</div>'+
-    '<div class="card" style="margin-top:16px;" data-tour-target="backup-transfer">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup &amp; transfer</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="manage-catalogue">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Manage catalogue</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Categories, items, photos</span>'+
+      renderCatalogueManager()+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Full account backup (everything)</div>'+
-      '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Includes data, clients, orders, credentials, and CSV exports</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account with data, clients, orders, and credentials</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-        '<button class="btn gold sm" data-action="export-everything">'+icon("download",14)+' Export everything</button>'+
+        '<button class="btn gold sm" data-action="export-everything">'+icon("download",14)+' Export</button>'+
         '<button class="btn wa sm" data-action="share-everything">'+icon("send",14)+' Share</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
-          '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
-        '</label>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import<input type="file" accept=".bizdeck,application/json" data-action="import-from-file" style="display:none;"></label>'+
       '</div>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Quick exports</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
@@ -3223,27 +3194,20 @@ function renderAccountGeneral(){
         '<button class="btn ghost sm" data-action="export-csv-orders">'+icon("download",14)+' '+nounFor("recordPlural")+' (CSV)</button>'+
       '</div>'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">'+
-        '<div><div style="font-size:13px;font-weight:500;">Automatic backup</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+autoBackupStatusText()+'</span></div>'+
+        '<div><div style="font-size:13px;font-weight:500;">Automatic backup</div><span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+autoBackupStatusText()+'</span></div>'+
         '<label class="switch"><input type="checkbox" data-action="toggle-auto-backup" '+(state.backupSettings.enabled?"checked":"")+'><span class="slider"></span></label>'+
       '</div>'+
       (state.backupSettings.enabled ?
-        '<div style="margin-top:10px;"><label>Backup frequency</label><select data-bind="backupSettings.frequency" data-rerender="1">'+
-          [["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"]].map(([v,l])=>'<option value="'+v+'" '+(state.backupSettings.frequency===v?"selected":"")+'>'+l+'</option>').join("")+
-        '</select></div>'
+        '<div style="margin-top:10px;"><label>Backup frequency</label><select data-bind="backupSettings.frequency" data-rerender="1">[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"]].map(([v,l])=>"<option value=\""+v+"\" "+(state.backupSettings.frequency===v?"selected":"")+">"+l+"</option>").join("")</select></div>'
       : '')+
     '</div>'+
-    '<div class="card" style="margin-top:16px;">'+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">'+
         '<div class="icon-badge" style="background:var(--green-soft);color:var(--green);">'+icon("cloud",16)+'</div>'+
         '<div class="disp" style="font-weight:600;font-size:14.5px;">Cloud backup</div>'+
       '</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+
-        (supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+
-      '</span>'+
-      (supportsFSAccess() ?
-        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Tip: if backups fail into a Google Drive folder, open Google Drive for Desktop → Preferences and switch that folder from \"Stream files\" to \"Mirror files\" — streamed folders often block direct writes from apps like this.</div>'
-        : '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">On a phone there\'s no way for BizDeck to write straight into a Drive folder — Share hands the file to the Google Drive app, and you pick the destination folder there. If an upload into a chosen folder fails, that\'s happening inside the Drive app itself: check the Drive app has storage permission, that the folder still exists and isn\'t offline-only, and try picking the folder again from a fresh Drive upload rather than a remembered shortcut.</div>')+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+(supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+'</span>'+
       (!supportsFSAccess() ?
         '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
         :
@@ -3252,13 +3216,7 @@ function renderAccountGeneral(){
         :
           '<div style="display:flex;align-items:center;gap:10px;background:'+(state.cloudBackup.permissionGranted===false?"var(--rust-soft)":"var(--green-soft)")+';border-radius:8px;padding:10px 12px;margin-bottom:10px;">'+
             '<div style="color:'+(state.cloudBackup.permissionGranted===false?"var(--rust)":"var(--green)")+';flex-shrink:0;">'+icon(state.cloudBackup.permissionGranted!==false?"check":"alert",16)+'</div>'+
-            '<div style="min-width:0;">'+
-              '<div style="font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Connected: '+esc(state.cloudBackup.folderName||"")+'</div>'+
-              '<div style="font-size:11px;color:var(--ink-soft);">'+
-                (state.cloudBackup.permissionGranted===false ? 'Permission needs renewal — tap Backup now.' :
-                  (state.cloudBackup.lastBackupAt ? "Last saved "+fmtDateTime(new Date(state.cloudBackup.lastBackupAt)) : "No backup saved yet"))+
-              '</div>'+
-            '</div>'+
+            '<div style="min-width:0;"><div style="font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Connected: '+esc(state.cloudBackup.folderName||"")+'</div><div style="font-size:11px;color:var(--ink-soft);">'+(state.cloudBackup.permissionGranted===false ? 'Permission needs renewal' : (state.cloudBackup.lastBackupAt ? "Last saved "+fmtDateTime(new Date(state.cloudBackup.lastBackupAt)) : "No backup saved yet"))+'</div></div>'+
           '</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'+
             '<button class="btn gold sm" data-action="backup-to-cloud-now">'+icon("upload",14)+' Backup now</button>'+
@@ -3266,25 +3224,33 @@ function renderAccountGeneral(){
             '<button class="btn ghost sm" data-action="disconnect-cloud-folder">'+icon("x",14)+' Disconnect</button>'+
           '</div>'+
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;border-top:1px solid var(--line);">'+
-            '<div><div style="font-size:13px;font-weight:500;">Include in automatic backups</div>'+
-              '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+
-                (state.backupSettings.enabled ?
-                  'Runs '+({daily:"daily",weekly:"weekly",monthly:"monthly"}[state.backupSettings.frequency]||"weekly")
-                  : 'Enable Automatic backup first')+
-              '</span>'+
-            '</div>'+
+            '<div><div style="font-size:13px;font-weight:500;">Include in automatic backups</div><span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+(state.backupSettings.enabled ? "Runs "+({daily:"daily",weekly:"weekly",monthly:"monthly"}[state.backupSettings.frequency]||"weekly") : "Enable Automatic backup first")+'</span></div>'+
             '<label class="switch"><input type="checkbox" data-action="toggle-cloud-auto-sync" '+(state.cloudBackup.autoSync?"checked":"")+(state.backupSettings.enabled?"":" disabled")+'><span class="slider"></span></label>'+
           '</div>'
       )+
     '</div>'+
-    '<div class="card" style="margin-top:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Data &amp; privacy note</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Data & privacy note</div>'+
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Storage, backups, access, indemnity</span>'+
       '<div><button class="btn ghost sm" data-action="open-policy-modal">'+icon("help",14)+' View policy</button></div>'+
     '</div>'+
-    '<div class="card" style="margin-top:16px;border-color:var(--rust);" data-tour-target="danger-zone">'+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Contact the developer</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Support / bug report</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+        '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I have a query/complaint about "+esc(b.name||"BizDeck")+": ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
+        '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
+        '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
+      '</div>'+
+      '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'</div>'+
+      '<div style="border-top:1px solid var(--line);padding-top:12px;"><div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div><div style="font-size:12.5px;color:var(--ink-soft);"><span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span></div><button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy</button></div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
-      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything on this device</span>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
         '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
@@ -3292,6 +3258,7 @@ function renderAccountGeneral(){
     '</div>'
   );
 }
+
 
 /* ================= MODAL ================= */
 function renderModal(){
@@ -3311,6 +3278,7 @@ function renderModal(){
   if(state.modal.type==="contact-dev") return renderContactDevModal();
   if(state.modal.type==="upgrade-access") return renderUpgradeAccessModal();
   if(state.modal.type==="import-license") return renderImportLicenseModal();
+  if(state.modal.type==="license-details") return renderLicenseDetailsModal();
   if(state.modal.type==="policy") return renderPolicyModal();
   return "";
 }
@@ -3458,6 +3426,67 @@ function renderImportLicenseModal(){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       '<button class="btn gold" style="flex:1;min-width:120px;justify-content:center;" data-action="complete-import">'+icon("check",15)+' Restore Account</button>'+
       '<button class="btn ghost" style="flex:1;min-width:120px;justify-content:center;" data-action="close-modal">Cancel</button>'+
+    '</div>'
+  );
+}
+
+function renderLicenseDetailsModal(){
+  if(!state.account || !state.auth) {
+    return modalShell("No Account", 
+      '<div style="color:var(--ink-soft);">No active account to display.</div>'+
+      '<button class="btn ghost" data-action="close-modal">Close</button>'
+    );
+  }
+  
+  const license = createLicense();
+  
+  return modalShell("🔐 License & Account Details",
+    '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:16px;">Complete information about your BizDeck account and license. Keep this secure!</div>'+
+    
+    '<div class="card" style="margin-bottom:14px;background:var(--surface);border:1px solid var(--line);">'+
+      '<div style="font-weight:600;margin-bottom:8px;color:var(--ink);">Account Information</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">'+
+        '<div><span style="color:var(--ink-soft);">Email:</span><br><code style="color:var(--ink);">'+esc(state.account.email)+'</code></div>'+
+        '<div><span style="color:var(--ink-soft);">Account Name:</span><br><code style="color:var(--ink);">'+esc(state.account.name || state.business.name || "N/A")+'</code></div>'+
+        '<div><span style="color:var(--ink-soft);">Business:</span><br><code style="color:var(--ink);">'+esc(state.business.name)+'</code></div>'+
+        '<div><span style="color:var(--ink-soft);">Module:</span><br><code style="color:var(--ink);">'+esc(activeCatCfg().label)+'</code></div>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:14px;background:var(--surface);border:1px solid var(--line);">'+
+      '<div style="font-weight:600;margin-bottom:8px;color:var(--ink);">Access Credentials</div>'+
+      '<div style="margin-bottom:10px;">'+
+        '<span style="color:var(--ink-soft);font-size:11px;">Access Key:</span><br>'+
+        '<code style="display:block;background:var(--surface);padding:8px;border-radius:4px;border:1px solid var(--line);margin-top:4px;font-size:10px;overflow-x:auto;word-break:break-all;color:var(--ink);">'+esc(state.auth.accessKey)+'</code>'+
+        '<button class="btn ghost sm" style="margin-top:6px;" data-action="copy-text" data-value="'+esc(state.auth.accessKey)+'" data-label="copy-key">'+icon("check",12)+' Copy key</button>'+
+      '</div>'+
+      '<div>'+
+        '<span style="color:var(--ink-soft);font-size:11px;">Password:</span><br>'+
+        '<code style="display:block;background:var(--surface);padding:8px;border-radius:4px;border:1px solid var(--line);margin-top:4px;font-size:10px;color:var(--ink);">••••••••••••••••</code>'+
+        '<button class="btn ghost sm" style="margin-top:6px;" data-action="copy-account-password">'+icon("check",12)+' Copy password</button>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:14px;background:var(--surface);border:1px solid var(--line);">'+
+      '<div style="font-weight:600;margin-bottom:8px;color:var(--ink);">License</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">'+
+        '<div><span style="color:var(--ink-soft);">Status:</span><br><strong style="color:var(--green);">'+(state.universalAccess ? "Premium" : "Standard")+'</strong></div>'+
+        '<div><span style="color:var(--ink-soft);">Created:</span><br><code style="color:var(--ink);">'+esc(license.created)+'</code></div>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div style="background:var(--gold-soft);border-left:4px solid var(--gold);padding:12px;border-radius:4px;margin-bottom:14px;font-size:11px;color:var(--ink);line-height:1.6;">'+
+      '<strong>🔒 Security reminder:</strong><br>'+
+      '• Never share these credentials with anyone<br>'+
+      '• Use "Download license" to save a secure copy<br>'+
+      '• Store securely (password manager, encrypted drive)<br>'+
+      '• Delete downloaded files from Downloads folder<br>'+
+      '• Change password regularly'+
+    '</div>'+
+    
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
+      '<button class="btn ghost" style="flex:1;justify-content:center;" data-action="close-modal">Close</button>'+
     '</div>'
   );
 }
@@ -5280,6 +5309,13 @@ document.addEventListener("click", (e) => {
       downloadCredentialFile("bizdeck-password", state.account.password,
         "BizDeck password\nAccount: "+state.account.email+"\n\nPassword: "+state.account.password+"\n\nKeep this file private — store it somewhere secure (e.g. a password manager) and delete this file afterwards.\n");
       break;
+    case "download-license-document":
+      downloadLicenseDocument();
+      break;
+    case "view-license-modal":
+      state.modal = { type: "license-details" };
+      render();
+      break;
   }
 });
 
@@ -5306,7 +5342,7 @@ function exportClientsCsv(){
   downloadCsv("bizdeck-"+nounFor("clientPlural").toLowerCase()+"-"+todayISO()+".csv", rows);
 }
 
-// Consolidated export: Creates a ZIP with account backup + all CSV exports
+// Consolidated export: Creates single JSON file with everything (account + data + settings)
 async function exportEverything(){
   if(!state.account || !state.auth) {
     showToast("No account credentials to export", "error");
@@ -5314,61 +5350,26 @@ async function exportEverything(){
   }
   
   try {
-    const JSZip = window.JSZip || (await import("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js")).default;
-    if(!JSZip) {
-      // Fallback: export bizdeck file only
-      exportWithLicense();
-      showToast("ZIP library unavailable — exported account backup", "info");
-      return;
-    }
-    
-    const zip = new JSZip();
-    const stamp = new Date().toISOString().slice(0,10);
-    
-    // 1. Full account backup with credentials
+    // Create comprehensive backup with credentials
     const backup = Object.assign(buildBackupPayload(), {
       license: createLicense(),
       accountName: state.account.name
     });
-    zip.file("bizdeck-account-"+stamp+".bizdeck", JSON.stringify(backup, null, 2));
     
-    // 2. Data-only backup
-    zip.file("bizdeck-backup-"+stamp+".json", JSON.stringify(buildBackupPayload(), null, 2));
-    
-    // 3. Clients CSV
-    const clientRows = [["Name","Phone","Address","Gender","Notes","Total spent","Orders"]];
-    state.clients.forEach(c=>{
-      const clientOrders = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o));
-      const total = clientOrders.reduce((s,o)=>s+orderTotal(o),0);
-      clientRows.push([c.name, c.phone||"", c.address||"", c.gender||"", c.notes||"", total, clientOrders.length]);
-    });
-    zip.file(nounFor("clientPlural").toLowerCase()+"-"+stamp+".csv", clientRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
-    
-    // 4. Orders/Records CSV
-    const orderRows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
-    state.orders.filter(isRealOrder).forEach(o=>{
-      const client = state.clients.find(c=>c.id===o.clientId);
-      const total = orderTotal(o), paid = orderPaid(o);
-      orderRows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
-    });
-    zip.file(nounFor("recordPlural").toLowerCase()+"-"+stamp+".csv", orderRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
-    
-    // Generate and download ZIP
-    const blob = await zip.generateAsync({type:"blob"});
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0,10);
     a.href = url;
-    a.download = "bizdeck-complete-"+stamp+".zip";
+    a.download = "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck";
     document.body.appendChild(a);
     a.click();
     a.remove();
-    showToast("Full account backup exported", "success");
+    showToast("Complete account backup exported with credentials", "success");
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   } catch(e) {
     console.error("Export error:", e);
-    // Fallback to simple account export
-    exportWithLicense();
-    showToast("Exported account backup (ZIP unavailable)", "info");
+    showToast("Export failed: " + e.message, "error");
   }
 }
 function exportOrdersCsv(){
@@ -5473,7 +5474,7 @@ function shareBackupWithLicense(){
   });
 }
 
-// Share everything: uses native OS share sheet like order sharing
+// Share everything: uses native OS share sheet like order sharing (JSON format)
 async function shareEverything(){
   if(!state.account || !state.auth) {
     showToast("No account credentials to share", "error");
@@ -5481,53 +5482,16 @@ async function shareEverything(){
   }
   
   try {
-    const JSZip = window.JSZip || (await import("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js")).default;
     const stamp = new Date().toISOString().slice(0,10);
     
-    let file;
-    if(JSZip) {
-      // Create ZIP with all exports
-      const zip = new JSZip();
-      
-      // 1. Full account backup with credentials
-      const backup = Object.assign(buildBackupPayload(), {
-        license: createLicense(),
-        accountName: state.account.name
-      });
-      zip.file("bizdeck-account-"+stamp+".bizdeck", JSON.stringify(backup, null, 2));
-      
-      // 2. Data-only backup
-      zip.file("bizdeck-backup-"+stamp+".json", JSON.stringify(buildBackupPayload(), null, 2));
-      
-      // 3. Clients CSV
-      const clientRows = [["Name","Phone","Address","Gender","Notes","Total spent","Orders"]];
-      state.clients.forEach(c=>{
-        const clientOrders = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o));
-        const total = clientOrders.reduce((s,o)=>s+orderTotal(o),0);
-        clientRows.push([c.name, c.phone||"", c.address||"", c.gender||"", c.notes||"", total, clientOrders.length]);
-      });
-      zip.file(nounFor("clientPlural").toLowerCase()+"-"+stamp+".csv", clientRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
-      
-      // 4. Orders/Records CSV
-      const orderRows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
-      state.orders.filter(isRealOrder).forEach(o=>{
-        const client = state.clients.find(c=>c.id===o.clientId);
-        const total = orderTotal(o), paid = orderPaid(o);
-        orderRows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
-      });
-      zip.file(nounFor("recordPlural").toLowerCase()+"-"+stamp+".csv", orderRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
-      
-      const blob = await zip.generateAsync({type:"blob"});
-      file = new File([blob], "bizdeck-complete-"+stamp+".zip", {type:"application/zip"});
-    } else {
-      // Fallback to account backup file only
-      const backup = Object.assign(buildBackupPayload(), {
-        license: createLicense(),
-        accountName: state.account.name
-      });
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
-      file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
-    }
+    // Create comprehensive backup with credentials as JSON
+    const backup = Object.assign(buildBackupPayload(), {
+      license: createLicense(),
+      accountName: state.account.name
+    });
+    
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+    const file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
     
     // Share using native OS share sheet
     if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
@@ -5538,8 +5502,8 @@ async function shareEverything(){
     
     navigator.share({
       files:[file],
-      title:"BizDeck complete backup",
-      text:"Complete BizDeck account backup including data, credentials, and CSV exports"
+      title:"BizDeck account backup",
+      text:"Complete BizDeck account backup including data, clients, orders, and credentials"
     }).catch((e)=>{
       if(e && e.name==="AbortError") return;
       exportEverything();
@@ -5549,6 +5513,106 @@ async function shareEverything(){
     exportEverything();
     showToast("Exported backup (sharing unavailable)", "info");
   }
+}
+
+// Download complete license document with all account and credential info
+function downloadLicenseDocument(){
+  if(!state.account || !state.auth) {
+    showToast("No account information available", "error");
+    return;
+  }
+  
+  const license = createLicense();
+  const stamp = new Date().toISOString();
+  
+  const licenseText = `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          BIZDECK LICENSE DOCUMENT                            ║
+║                                                                              ║
+║  This document contains your complete account credentials and license info. ║
+║  Keep this file PRIVATE and SECURE.                                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ACCOUNT INFORMATION
+═══════════════════════════════════════════════════════════════════════════════
+Email:                     ${state.account.email}
+Account Name:              ${state.account.name || state.business.name || "N/A"}
+Business Name:             ${state.business.name}
+Registration Number:       ${state.business.regNumber || "N/A"}
+Currency:                  ${state.business.currency || "₦"}
+
+ACCESS CREDENTIALS
+═══════════════════════════════════════════════════════════════════════════════
+Access Key:                ${state.auth.accessKey}
+Password:                  ${state.account.password}
+
+LICENSE
+═══════════════════════════════════════════════════════════════════════════════
+License Email:             ${license.email}
+License Hash:              ${license.keyHash}
+Universal Access:          ${state.universalAccess ? "Yes (Premium)" : "No (Single Module)"}
+Active Module:             ${activeCatCfg().label}
+License Created:           ${license.created}
+
+IMPORTANT SECURITY NOTES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. CONFIDENTIALITY
+   - This document contains your complete account access credentials
+   - NEVER share this file or its contents with anyone
+   - Store securely (password-protected drive, encrypted password manager, etc.)
+   - Delete this file after you've written down what you need
+
+2. ACCOUNT RECOVERY
+   - If you lose access to BizDeck, use these credentials to restore:
+     * Email + Password: Sign in to your account
+     * Access Key: Required for programmatic access (advanced users)
+
+3. BACKUP SECURITY
+   - Use "Export everything" in Backup & transfer section to create backups
+   - Backups include this same information - store them securely
+   - Delete exported files from Downloads folder after backing up
+
+4. PASSWORD MANAGEMENT
+   - Change your password regularly from the Account settings
+   - Use a unique password not used elsewhere
+   - Consider storing in a password manager (1Password, Bitwarden, LastPass, etc.)
+
+5. IF COMPROMISED
+   - If you suspect someone accessed this file:
+     * Change your password immediately
+     * Regenerate access key (contact developer)
+     * Review recent account activity
+
+6. DEVICE MANAGEMENT
+   - Keep BizDeck app updated
+   - Use device-level security (PIN, biometric lock)
+   - Don't install on shared devices
+   - Sign out when not in use
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Generated:  ${stamp}
+Document Version: 1.0
+
+For support: ${DEV_EMAIL} or ${DEV_PHONE}
+
+═══════════════════════════════════════════════════════════════════════════════
+Confidential - For Account Holder Only
+═══════════════════════════════════════════════════════════════════════════════
+`;
+  
+  const blob = new Blob([licenseText], {type:"text/plain"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const dateStr = stamp.slice(0,10);
+  a.href = url;
+  a.download = "bizdeck-license-"+state.account.email+"-"+dateStr+".txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showToast("License document downloaded", "success");
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 /* ================= CLOUD FOLDER BACKUP =================
