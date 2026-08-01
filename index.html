@@ -236,6 +236,43 @@
   .welcome-logo img{width:100%;height:100%;object-fit:cover;}
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes splashLogoPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.07); opacity: .92; }
+  }
+  @keyframes splashDotPulse {
+    0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-5px); }
+  }
+  #splashScreen{
+    position:fixed; inset:0; z-index:99999;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:var(--bg);
+    transition:opacity .45s ease, visibility .45s ease;
+  }
+  #splashScreen.splash-hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  .splash-logo{
+    width:96px; height:96px; border-radius:26px; object-fit:cover;
+    box-shadow:0 10px 28px rgba(0,0,0,.14);
+    animation:splashLogoPulse 1.7s ease-in-out infinite;
+  }
+  .splash-name{
+    margin-top:18px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:700; font-size:32px;
+    letter-spacing:.01em;
+  }
+  .splash-name .biz{ color:#0c247f; }
+  .splash-name .deck{ color:#0b62f0; }
+  .splash-tagline{
+    margin-top:6px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:600; font-size:12.5px;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft);
+  }
+  .splash-dots{ display:flex; gap:7px; margin-top:20px; }
+  .splash-dot{
+    width:8px; height:8px; border-radius:50%; background:var(--gold);
+    animation:splashDotPulse 1.3s ease-in-out infinite;
+  }
+  .splash-dot:nth-child(2){ animation-delay:.15s; }
+  .splash-dot:nth-child(3){ animation-delay:.3s; }
 
   /* ================= GUIDED TOUR ================= */
   #tourOverlay{position:fixed;inset:0;z-index:9999;}
@@ -266,14 +303,32 @@
 </style>
 </head>
 <body>
-<div id="splashScreen" style="position:fixed;inset:0;z-index:99999;background:#FFFFFF;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .5s ease;">
-  <img src="icon-192.png" alt="BizDeck" style="width:84px;height:84px;border-radius:22px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-  <div style="font-size:21px;font-weight:700;color:#1E3A3A;font-family:Georgia,serif;letter-spacing:.02em;">BizDeck</div>
-  <div style="font-size:12px;color:#8a8577;">Manage. Track. Grow.</div>
+<div id="splashScreen">
+  <img src="icon-512.png" alt="BizDeck" class="splash-logo">
+  <div class="splash-name"><span class="biz">Biz</span><span class="deck">Deck</span></div>
+  <div class="splash-tagline">Manage. Track. Grow.</div>
+  <div class="splash-dots">
+    <span class="splash-dot"></span>
+    <span class="splash-dot"></span>
+    <span class="splash-dot"></span>
+  </div>
 </div>
 <div id="app"></div>
 
 <script>
+/* ================= SPLASH SCREEN ================= */
+const SPLASH_MIN_MS = 7000;
+const splashStartedAt = Date.now();
+function hideSplashScreen(){
+  const el = document.getElementById("splashScreen");
+  if(!el || el.dataset.hiding) return;
+  el.dataset.hiding = "1";
+  const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartedAt));
+  setTimeout(() => {
+    el.classList.add("splash-hide");
+    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 500);
+  }, wait);
+}
 /* ================= ICONS ================= */
 const ICONS = {
   refresh:'<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
@@ -642,7 +697,7 @@ const money = (n,cur) => (cur||"")+Number(n||0).toLocaleString(undefined,{maximu
 const greeting = () => { const h=new Date().getHours(); return h<12?"Good morning":h<17?"Good afternoon":"Good evening"; };
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function getPath(obj, path){ return path.split('.').reduce((o,k)=> (o==null?undefined:o[k]), obj); }
-function setPath(obj, path, value){ const keys=path.split('.'); let o=obj; for(let i=0;i<keys.length-1;i++){ o=o[keys[i]]; } o[keys[keys.length-1]]=value; }
+function setPath(obj, path, value){ const keys=path.split('.'); let o=obj; for(let i=0;i<keys.length-1;i++){ if(o[keys[i]]==null) o[keys[i]] = {}; o=o[keys[i]]; } o[keys[keys.length-1]]=value; }
 
 function resizeImage(file, maxDim, quality){
   maxDim = maxDim || 480; quality = quality || 0.72;
@@ -1407,6 +1462,7 @@ async function loadAll(){
   notifyBeforeClose();
   
   render();
+  hideSplashScreen();
 
   // Re-check the connected cloud folder in the background: the handle lives
   // in IndexedDB (it can't be stored in localStorage), and its write
@@ -1502,7 +1558,7 @@ function render(){
   }
 
   if(!state.businessCategory && !state.pendingCategory){
-    app.innerHTML = renderCategoryPickerView();
+    app.innerHTML = renderCategoryPickerView() + renderModal() + renderConfirmDialog() + renderAlertDialog();
     return;
   }
 
@@ -3157,7 +3213,7 @@ function renderAccountGeneral(){
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
         '</label>'+
-        (navigator.share ? '<button class="btn ghost sm" data-action="share-with-license">'+icon("send",14)+' Share</button>' : '')+
+        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-with-license">'+icon("send",14)+' Share</button>' : '')+
       '</div>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backup (data only)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -3190,7 +3246,14 @@ function renderAccountGeneral(){
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+
         (supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+
       '</span>'+
-      (!supportsFSAccess() ? '' :
+      (supportsFSAccess() ?
+        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Tip: if backups fail into a Google Drive folder, open Google Drive for Desktop → Preferences and switch that folder from \"Stream files\" to \"Mirror files\" — streamed folders often block direct writes from apps like this.</div>'
+        : '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">On a phone there\'s no way for BizDeck to write straight into a Drive folder — Share hands the file to the Google Drive app, and you pick the destination folder there. If an upload into a chosen folder fails, that\'s happening inside the Drive app itself: check the Drive app has storage permission, that the folder still exists and isn\'t offline-only, and try picking the folder again from a fresh Drive upload rather than a remembered shortcut.</div>')+
+      (!supportsFSAccess() ?
+        (navigator.share ?
+          '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
+          : '<div style="font-size:12px;color:var(--ink-soft);">Sharing isn\'t available in this browser — use Export in Backup &amp; transfer below, then upload that file from the Drive app.</div>')
+        :
         !state.cloudBackup.connected ?
           '<button class="btn gold sm" data-action="connect-cloud-folder">'+icon("cloud",14)+' Choose cloud folder</button>'
         :
@@ -4042,6 +4105,12 @@ function renderCategoryPickerView(){
                 '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">'+esc(cfg.blurb)+'</div></div>'+
             '</button>';
           }).join("")+
+        '</div>'+
+        '<div style="text-align:center;margin-top:22px;font-size:12.5px;color:var(--ink-soft);">'+
+          'Already have a BizDeck account? '+
+          '<label style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Restore from backup'+
+            '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
+          '</label>'+
         '</div>'+
       '</div>'+
     '</div>'
@@ -5119,6 +5188,7 @@ document.addEventListener("click", (e) => {
     case "export-csv-clients": exportClientsCsv(); break;
     case "export-csv-orders": exportOrdersCsv(); break;
     case "share-backup-file": shareBackupFile(); break;
+    case "share-backup-with-license": shareBackupWithLicense(); break;
     case "connect-cloud-folder": connectCloudFolder(); break;
     case "backup-to-cloud-now": backupToCloudFolder(false); break;
     case "disconnect-cloud-folder": disconnectCloudFolder(); break;
@@ -5175,7 +5245,6 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "export-with-license": exportWithLicense(); break;
-    case "share-with-license": shareWithLicense(); break;
     case "copy-access-key": {
       const key = state.auth.accessKey;
       navigator.clipboard.writeText(key).then(()=>{
@@ -5257,6 +5326,7 @@ function buildBackupPayload(){
     app: "BizDeck", version: 1, exportedAt: new Date().toISOString(),
     clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
+    businessCategory: state.businessCategory || null, universalAccess: !!state.universalAccess,
   };
 }
 
@@ -5308,9 +5378,14 @@ function exportWithLicense(){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-function shareWithLicense(){
-  if(!state.account || !state.auth){
-    showToast("No account credentials to share", "error");
+// Hands the .bizdeck file straight to the OS share sheet so it can go
+// directly into the Google Drive (or OneDrive/Dropbox) app on a phone,
+// instead of landing in Downloads and needing a manual move afterward —
+// that manual step is where uploads into a chosen Drive folder tend to
+// go wrong on mobile.
+function shareBackupWithLicense(){
+  if(!state.account || !state.auth) {
+    showToast("No account credentials to export", "error");
     return;
   }
   const backup = Object.assign(buildBackupPayload(), {
@@ -5414,6 +5489,34 @@ async function disconnectCloudFolder(){
 
 // Deletes older automatic snapshots so the folder doesn't fill up over time.
 // "bizdeck-backup-latest.json" is always overwritten in place and never counted.
+// Writes text to a file inside a directory handle, retrying briefly on
+// failure before giving up. Cloud-sync clients (Google Drive for Desktop,
+// OneDrive, etc.) commonly hold a brief lock on a file right after it's
+// created while they start syncing it — createWritable()/write()/close()
+// can fail during that window even though getFileHandle() already created
+// the (empty) file, which is exactly what leaves a 0-byte file sitting in
+// the folder. A short retry clears most of these transient failures; if it
+// still fails after retrying, the empty/partial file is removed so it
+// doesn't linger looking like a corrupt backup, and the original error is
+// thrown so the caller can report it.
+async function writeFileToDirectory(dirHandle, filename, contents){
+  let lastErr;
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      const fh = await dirHandle.getFileHandle(filename, { create:true });
+      const w = await fh.createWritable();
+      await w.write(contents);
+      await w.close();
+      return;
+    }catch(err){
+      lastErr = err;
+      if(attempt < 2) await new Promise(r => setTimeout(r, 450 * (attempt+1)));
+    }
+  }
+  try{ await dirHandle.removeEntry(filename); }catch(e){}
+  throw lastErr;
+}
+
 async function pruneCloudBackups(handle){
   try{
     const names = [];
@@ -5464,12 +5567,10 @@ async function backupToCloudFolder(silent){
     const json = JSON.stringify(payload, null, 2);
     const stamp = new Date().toISOString().replace(/[:.]/g,"-");
 
-    const fh = await handle.getFileHandle("bizdeck-backup-"+stamp+".json", { create:true });
-    const w = await fh.createWritable(); await w.write(json); await w.close();
+    await writeFileToDirectory(handle, "bizdeck-backup-"+stamp+".json", json);
 
     // Also keep one fixed, always-current copy for easy restoring.
-    const lfh = await handle.getFileHandle("bizdeck-backup-latest.json", { create:true });
-    const lw = await lfh.createWritable(); await lw.write(json); await lw.close();
+    await writeFileToDirectory(handle, "bizdeck-backup-latest.json", json);
 
     await pruneCloudBackups(handle);
 
@@ -5480,7 +5581,7 @@ async function backupToCloudFolder(silent){
     render();
     return true;
   }catch(err){
-    if(!silent) showToast("Couldn't save the backup to your cloud folder.", "error");
+    if(!silent) showToast("Couldn't write to that folder — your cloud app (Drive/OneDrive/etc.) may be syncing or locking it right now. Wait a moment and tap Backup now again.", "error");
     return false;
   }
 }
@@ -5494,11 +5595,12 @@ function importFromFile(file){
         showToast("This file doesn't contain account credentials", "error");
         return;
       }
-      // Open modal to ask for email and password
+      // Open modal to ask for password
       state.modal = { 
         type: "import-license",
         data: data
       };
+      state.importForm = { password: "" };
       render();
     } catch(err) {
       showToast("Failed to read file: " + err.message, "error");
@@ -5509,7 +5611,6 @@ function importFromFile(file){
 
 function completeImportWithCredentials(){
   const importForm = state.importForm || {};
-  const email = (importForm.email || "").trim().toLowerCase();
   const password = importForm.password || "";
   const data = state.modal?.data;
   
@@ -5518,18 +5619,30 @@ function completeImportWithCredentials(){
     return;
   }
   
+  const email = (data.license.email || "").trim().toLowerCase();
+  
   if(!email || !password) {
-    showToast("Please enter your email and password", "error");
+    showToast("Please enter your password", "error");
     return;
   }
   
   // Validate credentials against the license
   const enteredHash = simpleHash(email + password);
-  if(email !== data.license.email || enteredHash !== data.license.keyHash) {
-    showToast("Incorrect email or password for this account", "error");
+  if(enteredHash !== data.license.keyHash) {
+    showToast("Incorrect password for this account", "error");
     return;
   }
   
+  // Restore which business vertical this account was set up as (Tailoring,
+  // Restaurant, etc). Older backups made before this field existed fall
+  // back to "others" so the person can still get into the app; they can
+  // switch the vertical again if it's wrong.
+  state.businessCategory = (data.businessCategory && CATEGORY_CONFIG[data.businessCategory]) ? data.businessCategory : "others";
+  state.pendingCategory = null;
+  state.universalAccess = !!data.universalAccess;
+  persistBusinessCategory();
+  persistUniversalAccess();
+
   // Restore account data
   state.clients = data.clients || [];
   state.orders = data.orders || [];
@@ -5552,7 +5665,7 @@ function completeImportWithCredentials(){
   state.auth = {
     email: email,
     keyHash: enteredHash,
-    accessKey: generateAccessKey(),
+    accessKey: data.license.accessKey || generateAccessKey(),
     created: data.license.created
   };
   
@@ -6331,17 +6444,6 @@ function initPullToRefresh(){
 initPullToRefresh();
 
 loadAll();
-
-// Splash screen: shown for 7 seconds on launch, then fades out. The app
-// itself loads and renders normally underneath it the whole time, so
-// this is purely a branded cover, not something the app waits on.
-setTimeout(() => {
-  const splash = document.getElementById("splashScreen");
-  if(!splash) return;
-  splash.style.opacity = "0";
-  setTimeout(() => splash.remove(), 500);
-}, 7000);
-
 </script>
 
 <script>
