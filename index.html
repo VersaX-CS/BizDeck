@@ -3213,7 +3213,7 @@ function renderAccountGeneral(){
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
         '</label>'+
-        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-with-license">'+icon("send",14)+' Share</button>' : '')+
+        '<button class="btn ghost sm" data-action="share-backup-with-license">'+icon("send",14)+' Share</button>'+
       '</div>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backup (data only)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -3221,7 +3221,7 @@ function renderAccountGeneral(){
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept="application/json" data-action="import-data-file" style="display:none;">'+
         '</label>'+
-        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-file">'+icon("send",14)+' Share</button>' : '')+
+        '<button class="btn ghost sm" data-action="share-backup-file">'+icon("send",14)+' Share</button>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
         '<button class="btn ghost sm" data-action="export-csv-clients">'+icon("download",14)+' '+nounFor("clientPlural")+' (CSV)</button>'+
@@ -3250,9 +3250,7 @@ function renderAccountGeneral(){
         '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Tip: if backups fail into a Google Drive folder, open Google Drive for Desktop → Preferences and switch that folder from \"Stream files\" to \"Mirror files\" — streamed folders often block direct writes from apps like this.</div>'
         : '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">On a phone there\'s no way for BizDeck to write straight into a Drive folder — Share hands the file to the Google Drive app, and you pick the destination folder there. If an upload into a chosen folder fails, that\'s happening inside the Drive app itself: check the Drive app has storage permission, that the folder still exists and isn\'t offline-only, and try picking the folder again from a fresh Drive upload rather than a remembered shortcut.</div>')+
       (!supportsFSAccess() ?
-        (navigator.share ?
-          '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
-          : '<div style="font-size:12px;color:var(--ink-soft);">Sharing isn\'t available in this browser — use Export in Backup &amp; transfer below, then upload that file from the Drive app.</div>')
+        '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
         :
         !state.cloudBackup.connected ?
           '<button class="btn gold sm" data-action="connect-cloud-folder">'+icon("cloud",14)+' Choose cloud folder</button>'
@@ -5334,8 +5332,15 @@ function shareBackupFile(){
   const backup = buildBackupPayload();
   const stamp = new Date().toISOString().slice(0,10);
   const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-backup-"+stamp+".json", {type:"application/json"});
-  if(navigator.canShare && !navigator.canShare({files:[file]})){ exportBackup(); return; }
-  navigator.share({ files:[file], title:"BizDeck backup" }).catch(()=>{});
+  if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
+    exportBackup();
+    showToast("Sharing isn't available here — downloaded the backup instead", "info");
+    return;
+  }
+  navigator.share({ files:[file], title:"BizDeck backup" }).catch((e)=>{
+    if(e && e.name==="AbortError") return;
+    exportBackup();
+  });
 }
 
 function exportBackup(){
@@ -5394,8 +5399,15 @@ function shareBackupWithLicense(){
   });
   const stamp = new Date().toISOString().slice(0,10);
   const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
-  if(navigator.canShare && !navigator.canShare({files:[file]})){ exportWithLicense(); return; }
-  navigator.share({ files:[file], title:"BizDeck account backup" }).catch(()=>{});
+  if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
+    exportWithLicense();
+    showToast("Sharing isn't available here — downloaded the backup instead", "info");
+    return;
+  }
+  navigator.share({ files:[file], title:"BizDeck account backup" }).catch((e)=>{
+    if(e && e.name==="AbortError") return;
+    exportWithLicense();
+  });
 }
 
 /* ================= CLOUD FOLDER BACKUP =================
