@@ -257,9 +257,11 @@
     animation:splashLogoPulse 1.7s ease-in-out infinite;
   }
   .splash-name{
-    margin-top:18px; font-family:'Fraunces',serif; font-weight:700; font-size:22px;
-    letter-spacing:.01em; color:var(--ink);
+    margin-top:18px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:700; font-size:22px;
+    letter-spacing:.01em;
   }
+  .splash-name .biz{ color:#003cdc; }
+  .splash-name .deck{ color:#06c882; }
   .splash-dots{ display:flex; gap:7px; margin-top:20px; }
   .splash-dot{
     width:8px; height:8px; border-radius:50%; background:var(--gold);
@@ -299,7 +301,7 @@
 <body>
 <div id="splashScreen">
   <img src="icon-512.png" alt="BizDeck" class="splash-logo">
-  <div class="splash-name">BizDeck</div>
+  <div class="splash-name"><span class="biz">Biz</span><span class="deck">Deck</span></div>
   <div class="splash-dots">
     <span class="splash-dot"></span>
     <span class="splash-dot"></span>
@@ -310,33 +312,20 @@
 
 <script>
 /* ================= SPLASH SCREEN ================= */
-// Random splash screen duration between 3 and 5 seconds
-const SPLASH_MIN_MS = Math.floor(Math.random() * (5000 - 3000 + 1)) + 3000;
-
+const SPLASH_DURATIONS_MS = [3000, 5000];
+let splashToggle = 0;
+try{ splashToggle = localStorage.getItem("splashToggle")==="1" ? 1 : 0; }catch(e){}
+try{ localStorage.setItem("splashToggle", splashToggle ? "0" : "1"); }catch(e){}
+const SPLASH_MIN_MS = SPLASH_DURATIONS_MS[splashToggle];
 const splashStartedAt = Date.now();
-
-function hideSplashScreen() {
+function hideSplashScreen(){
   const el = document.getElementById("splashScreen");
-
-  // Prevent running more than once
-  if (!el || el.dataset.hiding) return;
-
+  if(!el || el.dataset.hiding) return;
   el.dataset.hiding = "1";
-
-  // Wait until the minimum splash duration has elapsed
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartedAt));
-
   setTimeout(() => {
-    // Start the fade-out animation
     el.classList.add("splash-hide");
-
-    // Remove the splash screen after the animation completes
-    setTimeout(() => {
-      if (el.parentNode) {
-        el.parentNode.removeChild(el);
-      }
-    }, 500);
-
+    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 500);
   }, wait);
 }
 /* ================= ICONS ================= */
