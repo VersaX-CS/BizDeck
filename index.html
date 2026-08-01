@@ -34,7 +34,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Sacramento&family=Caveat:wght@500;700&family=Parisienne&display=swap');
   :root{
-    --bg:#E7E1D3; --surface:#FBF9F3; --ink:#26221B; --ink-soft:#645E50;
+    --bg:#FFFFFF; --surface:#FFFFFF; --ink:#26221B; --ink-soft:#645E50;
     --primary:#1E3A3A; --primary-dark:#122626; --gold:#B8842E; --gold-soft:#E7D2A4;
     --rust:#A2432B; --rust-soft:#F0DAD1; --line:#D6CDB6; --green:#3E6B4F; --green-soft:#DCE9DD;
   }
@@ -55,7 +55,8 @@
 
   .shell{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw;overflow:hidden;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
-    padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;}
+    padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;
+    box-shadow:0 1px 3px rgba(0,0,0,0.05);position:relative;z-index:3;}
   .brand{display:flex;align-items:center;gap:12px;min-width:0;flex:1 1 auto;overflow:hidden;}
   .brand-badge{width:42px;height:42px;border-radius:12px;background:var(--primary);color:#fff;
     display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:600;
@@ -70,7 +71,8 @@
 
   .content{flex:1;min-height:0;overflow-y:auto;padding:20px;}
   .bottomnav{display:flex;background:var(--surface);border-top:1px solid var(--line);flex-shrink:0;
-    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));position:relative;z-index:5;}
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));position:relative;z-index:5;
+    box-shadow:0 -1px 3px rgba(0,0,0,0.05);}
   .navtab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;
     border-radius:12px;color:var(--ink-soft);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;}
   .navtab svg{width:21px;height:21px;}
@@ -105,7 +107,7 @@
   .switch input:checked + .slider::before{transform:translateX(17px);}
 
   .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;
-    box-shadow:0 1px 2px rgba(38,34,27,0.05), 0 6px 16px rgba(38,34,27,0.05);}
+    box-shadow:0 1px 2px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.06);}
   .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;}
   .icon-badge{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .icon-badge svg{width:16px;height:16px;}
@@ -143,7 +145,8 @@
 
   .modalwrap{position:fixed;inset:0;background:rgba(20,20,15,0.55);display:flex;
     justify-content:center;z-index:50;padding:30px 16px;overflow-y:auto;}
-  .modal{background:var(--surface);border-radius:14px;width:100%;max-width:640px;padding:22px;margin:auto;}
+  .modal{background:var(--surface);border-radius:14px;width:100%;max-width:640px;padding:22px;margin:auto;
+    box-shadow:0 16px 40px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08);}
   .modal.wide{max-width:760px;}
   .modal.full{max-width:960px;width:96vw;max-height:88vh;overflow-y:auto;}
   .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -368,17 +371,17 @@ function notifyBeforeClose(){
 
 /* ================= HELPERS ================= */
 const THEMES = {
-  indigo:     { label:"Indigo & Gold",    vars:{ bg:"#E7E1D3", surface:"#FBF9F3", ink:"#26221B", "ink-soft":"#645E50", primary:"#1E3A3A", "primary-dark":"#122626", gold:"#B8842E", "gold-soft":"#E7D2A4", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#D6CDB6", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
-  terracotta: { label:"Terracotta & Cream", vars:{ bg:"#F3E9DC", surface:"#FFFBF5", ink:"#3A2A20", "ink-soft":"#8A6F5C", primary:"#B4552F", "primary-dark":"#8C3F20", gold:"#C99A3D", "gold-soft":"#EAD9A8", rust:"#8C2F2F", "rust-soft":"#EFD3D0", line:"#E3CBB0", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
-  emerald:    { label:"Emerald & Blush",  vars:{ bg:"#E8EEE7", surface:"#FBFDF9", ink:"#1F2A22", "ink-soft":"#5E7267", primary:"#1F5C46", "primary-dark":"#123D2E", gold:"#C97B87", "gold-soft":"#F2D9DE", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#CBDBD0", green:"#2F6E4E", "green-soft":"#D8EBDF" } },
-  charcoal:   { label:"Charcoal & Copper", vars:{ bg:"#E4E1DC", surface:"#FAF9F6", ink:"#211F1C", "ink-soft":"#635F57", primary:"#2B2A28", "primary-dark":"#151412", gold:"#B5652E", "gold-soft":"#E8CBAE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#D4D0C8", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
-  navy:       { label:"Navy & Rose",      vars:{ bg:"#E6E8ED", surface:"#FBFCFE", ink:"#1C2333", "ink-soft":"#5C6579", primary:"#233A5E", "primary-dark":"#152438", gold:"#C97A8C", "gold-soft":"#F1D7DE", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#CDD3DE", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
-  plum:       { label:"Plum & Champagne", vars:{ bg:"#EAE1E6", surface:"#FBF6F8", ink:"#2B1F2A", "ink-soft":"#73636D", primary:"#5B2E52", "primary-dark":"#3D1D37", gold:"#C9A15A", "gold-soft":"#EFDFB8", rust:"#8C3B4A", "rust-soft":"#EBD5D9", line:"#D9C9D3", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
-  ocean:      { label:"Ocean & Sand",     vars:{ bg:"#DCE6E6", surface:"#F6FBFB", ink:"#16282C", "ink-soft":"#587178", primary:"#1F5C6B", "primary-dark":"#123A44", gold:"#D9A65C", "gold-soft":"#F2DFB8", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#C4D6D6", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
-  mustard:    { label:"Mustard & Ink",    vars:{ bg:"#EDE6D3", surface:"#FBF8ED", ink:"#221F17", "ink-soft":"#6B6350", primary:"#221F17", "primary-dark":"#100E0A", gold:"#C9A227", "gold-soft":"#EDE0A0", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#DCD1AE", green:"#556B2F", "green-soft":"#E3E9D0" } },
-  berry:      { label:"Berry & Cream",    vars:{ bg:"#F0E4E6", surface:"#FEFAFA", ink:"#2E1B20", "ink-soft":"#7A5C63", primary:"#7A2E44", "primary-dark":"#551F2F", gold:"#C9915A", "gold-soft":"#EFD9BE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#E3CDD1", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
-  forest:     { label:"Forest & Rust",    vars:{ bg:"#E2E6DC", surface:"#F8FAF5", ink:"#1E2A1B", "ink-soft":"#5A6B54", primary:"#33502E", "primary-dark":"#20331C", gold:"#B5652E", "gold-soft":"#E8CBAE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#CBD6C0", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
-  mono:       { label:"Black & White",    vars:{ bg:"#EDEDED", surface:"#FFFFFF", ink:"#111111", "ink-soft":"#6B6B6B", primary:"#111111", "primary-dark":"#000000", gold:"#4A4A4A", "gold-soft":"#DDDDDD", rust:"#5A5A5A", "rust-soft":"#E4E4E4", line:"#D0D0D0", green:"#2E2E2E", "green-soft":"#E2E2E2" } },
+  indigo:     { label:"Indigo & Gold",    vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#26221B", "ink-soft":"#645E50", primary:"#1E3A3A", "primary-dark":"#122626", gold:"#B8842E", "gold-soft":"#E7D2A4", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#D6CDB6", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
+  terracotta: { label:"Terracotta & Cream", vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#3A2A20", "ink-soft":"#8A6F5C", primary:"#B4552F", "primary-dark":"#8C3F20", gold:"#C99A3D", "gold-soft":"#EAD9A8", rust:"#8C2F2F", "rust-soft":"#EFD3D0", line:"#E3CBB0", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
+  emerald:    { label:"Emerald & Blush",  vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#1F2A22", "ink-soft":"#5E7267", primary:"#1F5C46", "primary-dark":"#123D2E", gold:"#C97B87", "gold-soft":"#F2D9DE", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#CBDBD0", green:"#2F6E4E", "green-soft":"#D8EBDF" } },
+  charcoal:   { label:"Charcoal & Copper", vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#211F1C", "ink-soft":"#635F57", primary:"#2B2A28", "primary-dark":"#151412", gold:"#B5652E", "gold-soft":"#E8CBAE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#D4D0C8", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
+  navy:       { label:"Navy & Rose",      vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#1C2333", "ink-soft":"#5C6579", primary:"#233A5E", "primary-dark":"#152438", gold:"#C97A8C", "gold-soft":"#F1D7DE", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#CDD3DE", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
+  plum:       { label:"Plum & Champagne", vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#2B1F2A", "ink-soft":"#73636D", primary:"#5B2E52", "primary-dark":"#3D1D37", gold:"#C9A15A", "gold-soft":"#EFDFB8", rust:"#8C3B4A", "rust-soft":"#EBD5D9", line:"#D9C9D3", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
+  ocean:      { label:"Ocean & Sand",     vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#16282C", "ink-soft":"#587178", primary:"#1F5C6B", "primary-dark":"#123A44", gold:"#D9A65C", "gold-soft":"#F2DFB8", rust:"#A2432B", "rust-soft":"#F0DAD1", line:"#C4D6D6", green:"#3E6B4F", "green-soft":"#DCE9DD" } },
+  mustard:    { label:"Mustard & Ink",    vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#221F17", "ink-soft":"#6B6350", primary:"#221F17", "primary-dark":"#100E0A", gold:"#C9A227", "gold-soft":"#EDE0A0", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#DCD1AE", green:"#556B2F", "green-soft":"#E3E9D0" } },
+  berry:      { label:"Berry & Cream",    vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#2E1B20", "ink-soft":"#7A5C63", primary:"#7A2E44", "primary-dark":"#551F2F", gold:"#C9915A", "gold-soft":"#EFD9BE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#E3CDD1", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
+  forest:     { label:"Forest & Rust",    vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#1E2A1B", "ink-soft":"#5A6B54", primary:"#33502E", "primary-dark":"#20331C", gold:"#B5652E", "gold-soft":"#E8CBAE", rust:"#9C3B2A", "rust-soft":"#EBD2CB", line:"#CBD6C0", green:"#4F7A5A", "green-soft":"#DCEBDF" } },
+  mono:       { label:"Black & White",    vars:{ bg:"#FFFFFF", surface:"#FFFFFF", ink:"#111111", "ink-soft":"#6B6B6B", primary:"#111111", "primary-dark":"#000000", gold:"#4A4A4A", "gold-soft":"#DDDDDD", rust:"#5A5A5A", "rust-soft":"#E4E4E4", line:"#D0D0D0", green:"#2E2E2E", "green-soft":"#E2E2E2" } },
 };
 // Neutral overlay applied on top of whichever accent theme is active when
 // Dark mode is switched on — keeps the chosen primary/gold/rust/green accent
@@ -428,7 +431,7 @@ function buildCustomTheme(primary, gold){
   return {
     label: "My colours",
     vars: {
-      bg: lighten(gold, 0.88), surface: lighten(gold, 0.97),
+      bg: "#FFFFFF", surface: "#FFFFFF",
       ink: darken(primary, 0.82), "ink-soft": darken(primary, 0.45),
       primary: primary, "primary-dark": darken(primary, 0.3),
       gold: gold, "gold-soft": lighten(gold, 0.78),
