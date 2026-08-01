@@ -3207,23 +3207,18 @@ function renderAccountGeneral(){
     '<div class="card" style="margin-top:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup &amp; transfer</div>'+
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
-      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Account backup (with credentials)</div>'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Full account backup (everything)</div>'+
+      '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Includes data, clients, orders, credentials, and CSV exports</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-        '<button class="btn gold sm" data-action="export-with-license">'+icon("download",14)+' Export</button>'+
+        '<button class="btn gold sm" data-action="export-everything">'+icon("download",14)+' Export everything</button>'+
+        '<button class="btn wa sm" data-action="share-everything">'+icon("send",14)+' Share</button>'+
         '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
         '</label>'+
-        '<button class="btn ghost sm" data-action="share-backup-with-license">'+icon("send",14)+' Share</button>'+
       '</div>'+
-      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backup (data only)</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
-          '<input type="file" accept="application/json" data-action="import-data-file" style="display:none;">'+
-        '</label>'+
-        '<button class="btn ghost sm" data-action="share-backup-file">'+icon("send",14)+' Share</button>'+
-      '</div>'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Quick exports</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Data only (JSON)</button>'+
         '<button class="btn ghost sm" data-action="export-csv-clients">'+icon("download",14)+' '+nounFor("clientPlural")+' (CSV)</button>'+
         '<button class="btn ghost sm" data-action="export-csv-orders">'+icon("download",14)+' '+nounFor("recordPlural")+' (CSV)</button>'+
       '</div>'+
@@ -5166,6 +5161,8 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "export-data": exportBackup(); break;
+    case "export-everything": exportEverything(); break;
+    case "share-everything": shareEverything(); break;
     case "reset-app-data": {
       askConfirm({
         title: "Reset BizDeck to its default state?",
@@ -5308,6 +5305,72 @@ function exportClientsCsv(){
   });
   downloadCsv("bizdeck-"+nounFor("clientPlural").toLowerCase()+"-"+todayISO()+".csv", rows);
 }
+
+// Consolidated export: Creates a ZIP with account backup + all CSV exports
+async function exportEverything(){
+  if(!state.account || !state.auth) {
+    showToast("No account credentials to export", "error");
+    return;
+  }
+  
+  try {
+    const JSZip = window.JSZip || (await import("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js")).default;
+    if(!JSZip) {
+      // Fallback: export bizdeck file only
+      exportWithLicense();
+      showToast("ZIP library unavailable — exported account backup", "info");
+      return;
+    }
+    
+    const zip = new JSZip();
+    const stamp = new Date().toISOString().slice(0,10);
+    
+    // 1. Full account backup with credentials
+    const backup = Object.assign(buildBackupPayload(), {
+      license: createLicense(),
+      accountName: state.account.name
+    });
+    zip.file("bizdeck-account-"+stamp+".bizdeck", JSON.stringify(backup, null, 2));
+    
+    // 2. Data-only backup
+    zip.file("bizdeck-backup-"+stamp+".json", JSON.stringify(buildBackupPayload(), null, 2));
+    
+    // 3. Clients CSV
+    const clientRows = [["Name","Phone","Address","Gender","Notes","Total spent","Orders"]];
+    state.clients.forEach(c=>{
+      const clientOrders = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o));
+      const total = clientOrders.reduce((s,o)=>s+orderTotal(o),0);
+      clientRows.push([c.name, c.phone||"", c.address||"", c.gender||"", c.notes||"", total, clientOrders.length]);
+    });
+    zip.file(nounFor("clientPlural").toLowerCase()+"-"+stamp+".csv", clientRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
+    
+    // 4. Orders/Records CSV
+    const orderRows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
+    state.orders.filter(isRealOrder).forEach(o=>{
+      const client = state.clients.find(c=>c.id===o.clientId);
+      const total = orderTotal(o), paid = orderPaid(o);
+      orderRows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
+    });
+    zip.file(nounFor("recordPlural").toLowerCase()+"-"+stamp+".csv", orderRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
+    
+    // Generate and download ZIP
+    const blob = await zip.generateAsync({type:"blob"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bizdeck-complete-"+stamp+".zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("Full account backup exported", "success");
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch(e) {
+    console.error("Export error:", e);
+    // Fallback to simple account export
+    exportWithLicense();
+    showToast("Exported account backup (ZIP unavailable)", "info");
+  }
+}
 function exportOrdersCsv(){
   const rows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
   state.orders.filter(isRealOrder).forEach(o=>{
@@ -5408,6 +5471,84 @@ function shareBackupWithLicense(){
     if(e && e.name==="AbortError") return;
     exportWithLicense();
   });
+}
+
+// Share everything: uses native OS share sheet like order sharing
+async function shareEverything(){
+  if(!state.account || !state.auth) {
+    showToast("No account credentials to share", "error");
+    return;
+  }
+  
+  try {
+    const JSZip = window.JSZip || (await import("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js")).default;
+    const stamp = new Date().toISOString().slice(0,10);
+    
+    let file;
+    if(JSZip) {
+      // Create ZIP with all exports
+      const zip = new JSZip();
+      
+      // 1. Full account backup with credentials
+      const backup = Object.assign(buildBackupPayload(), {
+        license: createLicense(),
+        accountName: state.account.name
+      });
+      zip.file("bizdeck-account-"+stamp+".bizdeck", JSON.stringify(backup, null, 2));
+      
+      // 2. Data-only backup
+      zip.file("bizdeck-backup-"+stamp+".json", JSON.stringify(buildBackupPayload(), null, 2));
+      
+      // 3. Clients CSV
+      const clientRows = [["Name","Phone","Address","Gender","Notes","Total spent","Orders"]];
+      state.clients.forEach(c=>{
+        const clientOrders = state.orders.filter(o=>o.clientId===c.id && isRealOrder(o));
+        const total = clientOrders.reduce((s,o)=>s+orderTotal(o),0);
+        clientRows.push([c.name, c.phone||"", c.address||"", c.gender||"", c.notes||"", total, clientOrders.length]);
+      });
+      zip.file(nounFor("clientPlural").toLowerCase()+"-"+stamp+".csv", clientRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
+      
+      // 4. Orders/Records CSV
+      const orderRows = [["Client","Title","Status","Total","Paid","Balance","Due date","Created"]];
+      state.orders.filter(isRealOrder).forEach(o=>{
+        const client = state.clients.find(c=>c.id===o.clientId);
+        const total = orderTotal(o), paid = orderPaid(o);
+        orderRows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
+      });
+      zip.file(nounFor("recordPlural").toLowerCase()+"-"+stamp+".csv", orderRows.map(r=>r.map(c=>'\"'+(c+'').replace(/"/g,'""')+'\"').join(',')).join('\n'));
+      
+      const blob = await zip.generateAsync({type:"blob"});
+      file = new File([blob], "bizdeck-complete-"+stamp+".zip", {type:"application/zip"});
+    } else {
+      // Fallback to account backup file only
+      const backup = Object.assign(buildBackupPayload(), {
+        license: createLicense(),
+        accountName: state.account.name
+      });
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+      file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
+    }
+    
+    // Share using native OS share sheet
+    if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
+      exportEverything();
+      showToast("Sharing isn't available here — downloaded the backup instead", "info");
+      return;
+    }
+    
+    navigator.share({
+      files:[file],
+      title:"BizDeck complete backup",
+      text:"Complete BizDeck account backup including data, credentials, and CSV exports"
+    }).catch((e)=>{
+      if(e && e.name==="AbortError") return;
+      exportEverything();
+    });
+  } catch(e) {
+    console.error("Share error:", e);
+    exportEverything();
+    showToast("Exported backup (sharing unavailable)", "info");
+  }
 }
 
 /* ================= CLOUD FOLDER BACKUP =================
