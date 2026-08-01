@@ -355,7 +355,7 @@ function notifyBeforeTour(){
       body: "Would you like a guided tour of the app features? You can replay it anytime from Account > General.",
       confirmLabel: "Take the tour",
       cancelLabel: "Skip",
-      onConfirm: () => { state.tour = true; state.tourIndex = 0; render(); }
+      onConfirm: () => { startTour(); }
     });
   }
 }
@@ -472,13 +472,13 @@ const DEMO_PASSWORD = "demo1234";
 // Access key required to create a real (non-demo) account. Change this string
 // to whatever key you want people to need when they tap "Sign up".
 const SIGNUP_KEY = "BLYZED123";
-// Universal key: works at signup no matter which vertical is picked, and
+// Premium key: works at signup no matter which vertical is picked, and
 // flags the account as "universalAccess" — such accounts get a module
 // switcher in Account so they can flip between every vertical's vocab,
 // statuses, and extra fields on the same device/data instead of being
 // locked to the one they first chose. Change this to whatever you want
-// a master/reseller key to be.
-const UNIVERSAL_KEY = "MASTERKEY-ALL";
+// the premium/master key to be.
+const PREMIUM_KEY = "MASTERKEY-ALL";
 
 /* ================= BUSINESS CATEGORY REGISTRY =================
    The app is a bundle: at first run, before any signup, the person
@@ -493,7 +493,7 @@ const UNIVERSAL_KEY = "MASTERKEY-ALL";
    Once a signup succeeds the category is written to
    localStorage("businessCategory") and locked permanently for that
    install — the picker never shows again on that device — UNLESS the
-   account signed up with UNIVERSAL_KEY, in which case a switcher in
+   account signed up with PREMIUM_KEY, in which case a switcher in
    Account lets it move between verticals freely. To add a new
    vertical, add an entry here; nothing else in the app needs to know
    it exists. All verticals share the same underlying record shape
@@ -503,9 +503,9 @@ const UNIVERSAL_KEY = "MASTERKEY-ALL";
 const ADMIN_ACCESS_KEY = "ADMIN-MASTER";
 const CATEGORY_CONFIG = {
   admin: {
-    id:"admin", label:"Admin Control Panel", icon:"account",
-    blurb:"Full system access to all modules.",
-    accessKey:"ADMIN-MASTER", defaultBusinessName:"Admin Panel", namePlaceholder:"Admin Access",
+    id:"admin", label:"Multiple Business Access", icon:"gallery",
+    blurb:"Premium tier — full access to every business module, switchable anytime.",
+    accessKey:"ADMIN-MASTER", defaultBusinessName:"Multiple Business Access", namePlaceholder:"e.g. My Business Group",
     nouns:{ client:"User", clientPlural:"Users", record:"Record", recordPlural:"Records", catalogue:"System", item:"Item" },
     statuses:[ {key:"Active",pct:100},{key:"Inactive",pct:0} ],
     hasMeasurements:false, itemFields:[], recordFields:[],
@@ -799,7 +799,7 @@ const state = {
   tab: "dashboard",
   businessCategory: null, // locked forever once a signup succeeds — see CATEGORY_CONFIG
   pendingCategory: null,  // chosen on the picker screen, in effect until signup completes
-  universalAccess: false, // true if this account signed up with UNIVERSAL_KEY — unlocks the module switcher
+  universalAccess: false, // true if this account signed up with PREMIUM_KEY — unlocks the module switcher
   policyAccepted: false, // must check both boxes on the policy gate before the category picker shows
   policyChecks: { understand:false, accept:false },
   clients: [],
@@ -3087,7 +3087,7 @@ function renderAccountGeneral(){
     (state.universalAccess ?
       '<div class="card" style="margin-bottom:16px;">'+
         '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Universal key</span>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
         '<div class="chipbar">'+
           CATEGORY_ORDER.map(key => {
             const cfg = CATEGORY_CONFIG[key];
@@ -3307,7 +3307,7 @@ function policyBodyHtml(){
     '<p style="margin:0 0 10px;">Signing up needs an access key, and there are two kinds:</p>'+
     '<ul style="margin:0 0 10px;padding-left:18px;">'+
       '<li style="margin-bottom:4px;"><strong style="color:var(--ink);">Standard key</strong> — unlocks one business module (Tailoring, Restaurant, Salon, etc.), matched to the category you picked. That category is then permanent on this device.</li>'+
-      '<li><strong style="color:var(--ink);">Universal key</strong> — unlocks every business module on the same account, with a switcher in Account to move between them at any time. The underlying data (clients, orders, catalogue) is shared across whichever module is active; only the labels, statuses and extra fields shown change.</li>'+
+      '<li><strong style="color:var(--ink);">Premium key</strong> — unlocks every business module on the same account, with a switcher in Account to move between them at any time. The underlying data (clients, orders, catalogue) is shared across whichever module is active; only the labels, statuses and extra fields shown change.</li>'+
     '</ul>'+
     '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Responsibility &amp; indemnity</p>'+
     '<p style="margin:0 0 10px;">You are solely responsible for the accuracy of the business, pricing and client information you enter, for how you use it with your clients, for keeping regular backups, and for the consequences of data loss. To the fullest extent permitted by law, you agree to indemnify and hold harmless '+esc(DEV_STUDIO)+' and '+esc(DEV_NAME)+' from any claim, loss, liability, or dispute — including with your own clients or customers — arising from your use of the app, data you enter or lose (whether by accident, device loss, or app malfunction), decisions made based on it, or your failure to keep backups. The app is provided as-is, with no warranty of uninterrupted, error-free, or loss-proof operation.</p>'+
@@ -3351,7 +3351,7 @@ function renderUpgradeAccessModal(){
     (upgradeSuccess ? '<div style="background:var(--green-soft);color:var(--green);font-size:12.5px;padding:10px 12px;border-radius:8px;margin-bottom:12px;">✓ '+esc(upgradeSuccess)+'</div>' : '')+
     '<div style="margin-bottom:14px;">'+
       '<label>Premium Access Key</label>'+
-      '<input id="upgradeKeyInput" data-bind="upgradeForm.key" value="'+esc(upgradeForm.key)+'" placeholder="Enter your universal key (e.g., MASTERKEY-ALL)" style="font-weight:500;">'+
+      '<input id="upgradeKeyInput" data-bind="upgradeForm.key" value="'+esc(upgradeForm.key)+'" placeholder="Enter your premium key (e.g., MASTERKEY-ALL)" style="font-weight:500;">'+
       '<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Access keys are valid for 5 minutes after being issued — if yours has expired, request a new one.</div>'+
     '</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
@@ -4000,7 +4000,7 @@ function renderPolicyGateView(){
         '<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px;display:flex;flex-direction:column;gap:10px;">'+
           '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;cursor:pointer;">'+
             '<input type="checkbox" data-action="toggle-policy-understand" '+(c.understand?"checked":"")+' style="width:16px;height:16px;margin-top:1px;flex-shrink:0;">'+
-            '<span>I understand my data is stored only on this device, and I understand the difference between a standard access key (one business module) and a universal key (all modules, switchable anytime).</span>'+
+            '<span>I understand my data is stored only on this device, and I understand the difference between a standard access key (one business module) and a premium key (all modules, switchable anytime).</span>'+
           '</label>'+
           '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;cursor:pointer;">'+
             '<input type="checkbox" data-action="toggle-policy-accept" '+(c.accept?"checked":"")+' style="width:16px;height:16px;margin-top:1px;flex-shrink:0;">'+
@@ -4021,7 +4021,7 @@ function renderCategoryPickerView(){
           '<div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">Pick a category to set up the right tools for your business. This choice is permanent on this device — you\'ll sign up with an access key next.</div>'+
         '</div>'+
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">'+
-          CATEGORY_ORDER.filter(key => key !== "admin").map(key => {
+          CATEGORY_ORDER.map(key => {
             const cfg = CATEGORY_CONFIG[key];
             return '<button type="button" class="card" data-action="choose-category" data-cat="'+key+'" style="text-align:left;display:flex;gap:12px;align-items:flex-start;border:none;">'+
               '<div class="icon-badge" style="background:var(--gold-soft);color:#8A5F1F;flex-shrink:0;">'+icon(cfg.icon,17)+'</div>'+
@@ -4082,7 +4082,7 @@ function renderAuthView(){
     '<div style="margin-bottom:14px;"><label>Access key</label><input data-bind="authForm.key" value="'+esc(f.key||"")+'" placeholder="Enter your access key">'+
       '<div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">Access keys are valid for 5 minutes after being issued — if yours has expired, request a new one.</div>'+
     '</div>'+
-    '<div style="text-align:center;margin-bottom:14px;font-size:11px;color:var(--ink-soft);">Have a universal key instead? Enter it above — it works for any module and lets you switch between them later in Account.</div>'+
+    '<div style="text-align:center;margin-bottom:14px;font-size:11px;color:var(--ink-soft);">Have a premium key instead? Enter it above — it works for any module and lets you switch between them later in Account.</div>'+
     '<button class="btn gold" style="width:100%;justify-content:center;" data-action="sign-up">'+icon("plus",15)+' Create account</button>'+
     '<div style="text-align:center;margin-top:16px;font-size:11.5px;color:var(--ink-soft);">Creating an account permanently clears the demo data on this device and unlocks full editing.</div>'+
     '<div style="text-align:center;margin-top:10px;font-size:12.5px;color:var(--ink-soft);">Already have an account? '+
@@ -4280,7 +4280,7 @@ function markTourSeen(){ try{ localStorage.setItem("ts_tour_seen","1"); }catch(e
 // Built as a function (not a static array) so every string reflects
 // whichever vertical is active right now — the tour needs to read
 // correctly whether the account is a tailor, a salon, a restaurant,
-// or any other business in CATEGORY_CONFIG, and (for universal-key
+// or any other business in CATEGORY_CONFIG, and (for premium-key
 // accounts) needs to re-read correctly after switching modules.
 function getTourSteps(){
   const cfg = activeCatCfg();
@@ -4895,7 +4895,7 @@ document.addEventListener("click", (e) => {
         state.authed = true; state.authError = null; state.viewOnly = false;
         state.isAdmin = true;
         state.businessCategory = "admin";
-        state.business = { name:"Admin Control Panel", logo:"" };
+        state.business = { name:"Multiple Business Access", logo:"" };
         state.clients = []; state.orders = []; state.catalogue = { categories:[], items:[] };
         if(supportsWebAuthn() && !hasBiometricForAccount()){
           setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
@@ -4929,7 +4929,7 @@ document.addEventListener("click", (e) => {
         state.authError = "Password should be at least 6 characters.";
       } else if(password !== f.confirm){
         state.authError = "Passwords don't match.";
-      } else if(key !== (CATEGORY_CONFIG[state.pendingCategory] || CATEGORY_CONFIG.tailoring).accessKey && key !== UNIVERSAL_KEY && key !== ADMIN_ACCESS_KEY){
+      } else if(key !== (CATEGORY_CONFIG[state.pendingCategory] || CATEGORY_CONFIG.tailoring).accessKey && key !== PREMIUM_KEY && key !== ADMIN_ACCESS_KEY){
         state.authError = "Incorrect access key.";
       } else {
         // Wipe the demo data — the new account starts with a clean slate.
@@ -4956,7 +4956,7 @@ document.addEventListener("click", (e) => {
         state.businessCategory = state.pendingCategory || "tailoring";
         state.pendingCategory = null;
         persistBusinessCategory();
-        state.universalAccess = (key === UNIVERSAL_KEY || key === ADMIN_ACCESS_KEY);
+        state.universalAccess = (key === PREMIUM_KEY || key === ADMIN_ACCESS_KEY);
         state.isAdmin = (key === ADMIN_ACCESS_KEY);
         persistUniversalAccess();
         state.authed = true; state.authError = null; state.authMode = "signin"; state.viewOnly = false;
@@ -5124,7 +5124,7 @@ document.addEventListener("click", (e) => {
       if(!key){
         state.upgradeError = "Please enter a premium access key.";
         state.upgradeSuccess = null;
-      } else if(key !== UNIVERSAL_KEY && key !== ADMIN_ACCESS_KEY){
+      } else if(key !== PREMIUM_KEY && key !== ADMIN_ACCESS_KEY){
         state.upgradeError = "Invalid premium key. Please check and try again.";
         state.upgradeSuccess = null;
       } else {
@@ -5147,6 +5147,61 @@ document.addEventListener("click", (e) => {
       completeImportWithCredentials();
       break;
     }
+    case "toggle-access-key": {
+      const display = el.getAttribute("data-display");
+      const container = document.getElementById("accessKeyDisplay");
+      if(display === "hidden"){
+        container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+state.auth.accessKey+'</code>';
+        el.setAttribute("data-display", "shown");
+        el.textContent = "Hide Access Key";
+      } else {
+        container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
+        el.setAttribute("data-display", "hidden");
+        el.textContent = "Show Access Key";
+      }
+      break;
+    }
+    case "export-with-license": exportWithLicense(); break;
+    case "copy-access-key": {
+      const key = state.auth.accessKey;
+      navigator.clipboard.writeText(key).then(()=>{
+        showToast("Access key copied to clipboard", "success");
+      }).catch(()=>{
+        showToast("Failed to copy access key", "error");
+      });
+      break;
+    }
+    case "toggle-account-password": {
+      const display = el.getAttribute("data-display");
+      const container = document.getElementById("accountPasswordDisplay");
+      if(display === "hidden"){
+        container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+esc(state.account.password)+'</code>';
+        el.setAttribute("data-display", "shown");
+        el.textContent = "Hide Password";
+      } else {
+        container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
+        el.setAttribute("data-display", "hidden");
+        el.textContent = "Show Password";
+      }
+      break;
+    }
+    case "copy-account-password": {
+      const pw = state.account.password;
+      navigator.clipboard.writeText(pw).then(()=>{
+        showToast("Password copied to clipboard", "success");
+      }).catch(()=>{
+        showToast("Failed to copy password", "error");
+      });
+      break;
+    }
+    case "download-access-key-file":
+      downloadCredentialFile("bizdeck-access-key", state.auth.accessKey,
+        "BizDeck access key\nAccount: "+state.account.email+"\nGenerated: "+state.auth.created+"\n\nAccess key: "+state.auth.accessKey+"\n\nKeep this file private. Anyone with this key and your exported account backup can restore your account on another device.\n");
+      break;
+    case "download-password-file":
+      downloadCredentialFile("bizdeck-password", state.account.password,
+        "BizDeck password\nAccount: "+state.account.email+"\n\nPassword: "+state.account.password+"\n\nKeep this file private — store it somewhere secure (e.g. a password manager) and delete this file afterwards.\n");
+      break;
   }
 });
 
@@ -5781,7 +5836,7 @@ function downloadUserGuide(){
   numStep(1, "Open the app — it launches straight into a demo account pre-loaded with sample "+clientPl+", "+recordPl+" and "+catWordLower+" items so you can explore safely.");
   numStep(2, "The demo is view-only. Nothing you tap, add or edit in it is ever saved — try everything without worrying.");
   numStep(3, "When ready, tap Sign up. Choose a business type — Tailoring, Restaurant, Salon, Retail, Real Estate, Events, Laundry or Other — this choice is permanent on this device and shapes every label and status you'll see.");
-  numStep(4, "Enter the access key from whoever set up your app. A standard key unlocks one business type; a universal key unlocks all eight and lets you switch between them later from Account.");
+  numStep(4, "Enter the access key from whoever set up your app. A standard key unlocks one business type; a premium key unlocks all eight and lets you switch between them later from Account.");
   numStep(5, "Tap Create account. This permanently clears the demo data on this device and unlocks full editing of your real business data.");
   tip("if you're just exploring, stay in the demo as long as you like before creating a real account — there's no time limit.");
   sectionGap();
@@ -5847,11 +5902,11 @@ function downloadUserGuide(){
     ["Add one or more bank accounts", "Shown automatically on receipts", clientPlCap+" always know where to pay", "Edit or remove accounts any time"]
   );
   if(state.universalAccess){
-    subheading("Business module switcher (universal key)");
-    paragraph("Because this account signed up with a universal key, you can switch business modules anytime from Account. Your "+clientPl+", "+recordPl+" and "+catWordLower+" stay exactly the same — only the labels, statuses and extra fields shown change to match the module you pick.");
+    subheading("Business module switcher (premium key)");
+    paragraph("Because this account signed up with a premium key, you can switch business modules anytime from Account. Your "+clientPl+", "+recordPl+" and "+catWordLower+" stay exactly the same — only the labels, statuses and extra fields shown change to match the module you pick.");
   } else {
-    subheading("Have a universal key instead?");
-    paragraph("A universal key unlocks every business type and adds a module switcher here in Account, letting you flip between them without losing data. Contact the developer to upgrade your key.");
+    subheading("Have a premium key instead?");
+    paragraph("A premium key unlocks every business type and adds a module switcher here in Account, letting you flip between them without losing data. Contact the developer to upgrade your key.");
   }
   sectionGap();
 
@@ -5886,8 +5941,8 @@ function downloadUserGuide(){
   paragraph("Quick answers to the questions "+cfg.label.split(" / ")[0].toLowerCase()+" businesses ask most.");
   faqItem("I forgot my password — what do I do?", "Contact the developer using the details on the last page to help you regain access.");
   faqItem("Can I use the app on more than one device?", "Data is stored per device. Export a backup on one device and import it on the other to move your data across.");
-  faqItem("What is the access key for signing up?", "It's provided by whoever set up your copy of the app. A standard key unlocks one business type; a universal key unlocks every business type and lets you switch between them from Account. Contact the developer if you don't have one.");
-  faqItem("Can I change my business type after signing up?", "Only if you signed up with a universal key — use the Business module switcher in Account. With a standard key, the business type chosen at sign-up is permanent on that device.");
+  faqItem("What is the access key for signing up?", "It's provided by whoever set up your copy of the app. A standard key unlocks one business type; a premium key unlocks every business type and lets you switch between them from Account. Contact the developer if you don't have one.");
+  faqItem("Can I change my business type after signing up?", "Only if you signed up with a premium key — use the Business module switcher in Account. With a standard key, the business type chosen at sign-up is permanent on that device.");
   faqItem("Will creating an account delete anything important?", "It clears the sample demo data only. If you already have real data saved, that stays intact.");
   faqItem("Is my data sent to a server?", "No — everything is stored locally on your device. Back up regularly to avoid losing it.");
   faqItem("Fingerprint sign-in isn't showing up — why?", "It only appears on devices with a supported biometric sensor, and after you've enabled it once from a password sign-in.");
@@ -6135,6 +6190,12 @@ document.addEventListener("change", (e) => {
     e.target.value = "";
     return;
   }
+  if(e.target.matches('[data-action="import-from-file"]')){
+    const f = e.target.files && e.target.files[0];
+    if(f) importFromFile(f);
+    e.target.value = "";
+    return;
+  }
   if(e.target.matches('[data-action="upload-logo"]')){
     const f = e.target.files && e.target.files[0];
     if(f){ resizeImage(f, 300, 0.82).then(url => { state.business.logo = url; persistBusiness(); render(); }); }
@@ -6171,77 +6232,6 @@ document.addEventListener("change", (e) => {
       if(cat){ urls.forEach(u=>cat.gallery.push(u)); persistCatalogue(); }
       render();
     });
-    return;
-  }
-  if(e.target.matches('[data-action="toggle-access-key"]')){
-    const display = e.target.getAttribute("data-display");
-    const container = document.getElementById("accessKeyDisplay");
-    if(display === "hidden"){
-      container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+state.auth.accessKey+'</code>';
-      e.target.setAttribute("data-display", "shown");
-      e.target.textContent = "Hide Access Key";
-    } else {
-      container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
-      e.target.setAttribute("data-display", "hidden");
-      e.target.textContent = "Show Access Key";
-    }
-    return;
-  }
-  if(e.target.matches('[data-action="export-with-license"]')){
-    exportWithLicense();
-    return;
-  }
-  if(e.target.matches('[data-action="import-from-file"]')){
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".bizdeck";
-    input.addEventListener("change", (ev) => {
-      const file = ev.target.files?.[0];
-      if(file) importFromFile(file);
-    });
-    input.click();
-    return;
-  }
-  if(e.target.matches('[data-action="copy-access-key"]')){
-    const key = state.auth.accessKey;
-    navigator.clipboard.writeText(key).then(()=>{
-      showToast("Access key copied to clipboard", "success");
-    }).catch(()=>{
-      showToast("Failed to copy access key", "error");
-    });
-    return;
-  }
-  if(e.target.matches('[data-action="toggle-account-password"]')){
-    const display = e.target.getAttribute("data-display");
-    const container = document.getElementById("accountPasswordDisplay");
-    if(display === "hidden"){
-      container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+esc(state.account.password)+'</code>';
-      e.target.setAttribute("data-display", "shown");
-      e.target.textContent = "Hide Password";
-    } else {
-      container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
-      e.target.setAttribute("data-display", "hidden");
-      e.target.textContent = "Show Password";
-    }
-    return;
-  }
-  if(e.target.matches('[data-action="copy-account-password"]')){
-    const pw = state.account.password;
-    navigator.clipboard.writeText(pw).then(()=>{
-      showToast("Password copied to clipboard", "success");
-    }).catch(()=>{
-      showToast("Failed to copy password", "error");
-    });
-    return;
-  }
-  if(e.target.matches('[data-action="download-access-key-file"]')){
-    downloadCredentialFile("bizdeck-access-key", state.auth.accessKey,
-      "BizDeck access key\nAccount: "+state.account.email+"\nGenerated: "+state.auth.created+"\n\nAccess key: "+state.auth.accessKey+"\n\nKeep this file private. Anyone with this key and your exported account backup can restore your account on another device.\n");
-    return;
-  }
-  if(e.target.matches('[data-action="download-password-file"]')){
-    downloadCredentialFile("bizdeck-password", state.account.password,
-      "BizDeck password\nAccount: "+state.account.email+"\n\nPassword: "+state.account.password+"\n\nKeep this file private — store it somewhere secure (e.g. a password manager) and delete this file afterwards.\n");
     return;
   }
 });

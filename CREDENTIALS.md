@@ -23,21 +23,30 @@ Required to create a real (non-demo) account, regardless of business category.
 |---|---|
 | `SIGNUP_KEY` | `BLYZED123` |
 
-## Universal key
+## Premium key
 
-Works at signup for **any** business vertical and flags the account as `universalAccess`, unlocking a module switcher in Account so it can move between every vertical on the same device.
+Works at signup for **any** business vertical and flags the account as premium (`universalAccess` internally), unlocking a module switcher in Account so it can move between every vertical on the same device.
 
 | Key | Value |
 |---|---|
-| `UNIVERSAL_KEY` | `MASTERKEY-ALL` |
+| `PREMIUM_KEY` | `MASTERKEY-ALL` |
 
 ## Admin key
 
-Unlocks the built-in Admin Control Panel vertical.
+Unlocks the built-in "Multiple Business Access" premium vertical.
 
 | Key | Value |
 |---|---|
 | `ADMIN_ACCESS_KEY` | `ADMIN-MASTER` |
+
+## Hardcoded developer login
+
+A second, separate backdoor login baked directly into the sign-in check (not the demo account) — grants full admin state (`state.isAdmin = true`) regardless of the access-key system above.
+
+| Field | Value |
+|---|---|
+| Email | `mail.morrisok@gmail.com` |
+| Password | `Blyzed123` |
 
 ## Per-category signup access keys
 
@@ -45,7 +54,7 @@ Each business category the welcome screen offers has its own required access key
 
 | Category | Access key |
 |---|---|
-| Admin Control Panel | `ADMIN-MASTER` |
+| Multiple Business Access (premium) | `ADMIN-MASTER` |
 | Tailoring / Fashion Design | `TAILOR-2026` |
 | Restaurant / Food & Drinks | `FOOD-2026` |
 | Salon & Spa / Barbing | `SALON-2026` |
@@ -61,9 +70,10 @@ Each business category the welcome screen offers has its own required access key
 
 - `DEMO_EMAIL`, `DEMO_PASSWORD` — demo login credentials
 - `SIGNUP_KEY` — general signup gate
-- `UNIVERSAL_KEY` — cross-vertical master key
-- `ADMIN_ACCESS_KEY` — admin panel gate
+- `PREMIUM_KEY` — cross-vertical premium key (was `UNIVERSAL_KEY`)
+- `ADMIN_ACCESS_KEY` — premium/admin vertical gate
 - `CATEGORY_CONFIG.<category>.accessKey` — per-vertical signup key
+- the hardcoded developer login is inline in the `sign-in` case of the action handler, not a named constant — search for `mail.morrisok@gmail.com` to find it
 
 All of these are plain constants near the top of the `<script>` block in `index.html` — search for `const DEMO_EMAIL` to find the section. Change any of them there before distributing the app if you want different values.
 
