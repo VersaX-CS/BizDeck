@@ -319,7 +319,7 @@ function hideSplashScreen(){
   const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartedAt));
   setTimeout(() => {
     el.classList.add("splash-hide");
-    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }2000);
+    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el);}550);
   }, wait);
 }
 /* ================= ICONS ================= */
