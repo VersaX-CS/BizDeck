@@ -236,6 +236,37 @@
   .welcome-logo img{width:100%;height:100%;object-fit:cover;}
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes splashLogoPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.07); opacity: .92; }
+  }
+  @keyframes splashDotPulse {
+    0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-5px); }
+  }
+  #splashScreen{
+    position:fixed; inset:0; z-index:99999;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:var(--bg);
+    transition:opacity .45s ease, visibility .45s ease;
+  }
+  #splashScreen.splash-hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  .splash-logo{
+    width:96px; height:96px; border-radius:26px; object-fit:cover;
+    box-shadow:0 10px 28px rgba(0,0,0,.14);
+    animation:splashLogoPulse 1.7s ease-in-out infinite;
+  }
+  .splash-name{
+    margin-top:18px; font-family:'Fraunces',serif; font-weight:700; font-size:22px;
+    letter-spacing:.01em; color:var(--ink);
+  }
+  .splash-dots{ display:flex; gap:7px; margin-top:20px; }
+  .splash-dot{
+    width:8px; height:8px; border-radius:50%; background:var(--gold);
+    animation:splashDotPulse 1.3s ease-in-out infinite;
+  }
+  .splash-dot:nth-child(2){ animation-delay:.15s; }
+  .splash-dot:nth-child(3){ animation-delay:.3s; }
 
   /* ================= GUIDED TOUR ================= */
   #tourOverlay{position:fixed;inset:0;z-index:9999;}
@@ -266,9 +297,31 @@
 </style>
 </head>
 <body>
+<div id="splashScreen">
+  <img src="icon-512.png" alt="BizDeck" class="splash-logo">
+  <div class="splash-name">BizDeck</div>
+  <div class="splash-dots">
+    <span class="splash-dot"></span>
+    <span class="splash-dot"></span>
+    <span class="splash-dot"></span>
+  </div>
+</div>
 <div id="app"></div>
 
 <script>
+/* ================= SPLASH SCREEN ================= */
+const SPLASH_MIN_MS = 700;
+const splashStartedAt = Date.now();
+function hideSplashScreen(){
+  const el = document.getElementById("splashScreen");
+  if(!el || el.dataset.hiding) return;
+  el.dataset.hiding = "1";
+  const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashStartedAt));
+  setTimeout(() => {
+    el.classList.add("splash-hide");
+    setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 500);
+  }, wait);
+}
 /* ================= ICONS ================= */
 const ICONS = {
   refresh:'<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>',
@@ -1402,6 +1455,7 @@ async function loadAll(){
   notifyBeforeClose();
   
   render();
+  hideSplashScreen();
 
   // Re-check the connected cloud folder in the background: the handle lives
   // in IndexedDB (it can't be stored in localStorage), and its write
@@ -1497,7 +1551,7 @@ function render(){
   }
 
   if(!state.businessCategory && !state.pendingCategory){
-    app.innerHTML = renderCategoryPickerView();
+    app.innerHTML = renderCategoryPickerView() + renderModal() + renderConfirmDialog() + renderAlertDialog();
     return;
   }
 
@@ -3177,6 +3231,9 @@ function renderAccountGeneral(){
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+
         (supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+
       '</span>'+
+      (supportsFSAccess() ?
+        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Tip: if backups fail into a Google Drive folder, open Google Drive for Desktop → Preferences and switch that folder from \"Stream files\" to \"Mirror files\" — streamed folders often block direct writes from apps like this.</div>'
+        : '')+
       (!supportsFSAccess() ? '' :
         !state.cloudBackup.connected ?
           '<button class="btn gold sm" data-action="connect-cloud-folder">'+icon("cloud",14)+' Choose cloud folder</button>'
@@ -4029,6 +4086,12 @@ function renderCategoryPickerView(){
                 '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">'+esc(cfg.blurb)+'</div></div>'+
             '</button>';
           }).join("")+
+        '</div>'+
+        '<div style="text-align:center;margin-top:22px;font-size:12.5px;color:var(--ink-soft);">'+
+          'Already have a BizDeck account? '+
+          '<label style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Restore from backup'+
+            '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
+          '</label>'+
         '</div>'+
       '</div>'+
     '</div>'
@@ -5243,6 +5306,7 @@ function buildBackupPayload(){
     app: "BizDeck", version: 1, exportedAt: new Date().toISOString(),
     clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
+    businessCategory: state.businessCategory || null, universalAccess: !!state.universalAccess,
   };
 }
 
@@ -5385,6 +5449,34 @@ async function disconnectCloudFolder(){
 
 // Deletes older automatic snapshots so the folder doesn't fill up over time.
 // "bizdeck-backup-latest.json" is always overwritten in place and never counted.
+// Writes text to a file inside a directory handle, retrying briefly on
+// failure before giving up. Cloud-sync clients (Google Drive for Desktop,
+// OneDrive, etc.) commonly hold a brief lock on a file right after it's
+// created while they start syncing it — createWritable()/write()/close()
+// can fail during that window even though getFileHandle() already created
+// the (empty) file, which is exactly what leaves a 0-byte file sitting in
+// the folder. A short retry clears most of these transient failures; if it
+// still fails after retrying, the empty/partial file is removed so it
+// doesn't linger looking like a corrupt backup, and the original error is
+// thrown so the caller can report it.
+async function writeFileToDirectory(dirHandle, filename, contents){
+  let lastErr;
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      const fh = await dirHandle.getFileHandle(filename, { create:true });
+      const w = await fh.createWritable();
+      await w.write(contents);
+      await w.close();
+      return;
+    }catch(err){
+      lastErr = err;
+      if(attempt < 2) await new Promise(r => setTimeout(r, 450 * (attempt+1)));
+    }
+  }
+  try{ await dirHandle.removeEntry(filename); }catch(e){}
+  throw lastErr;
+}
+
 async function pruneCloudBackups(handle){
   try{
     const names = [];
@@ -5435,12 +5527,10 @@ async function backupToCloudFolder(silent){
     const json = JSON.stringify(payload, null, 2);
     const stamp = new Date().toISOString().replace(/[:.]/g,"-");
 
-    const fh = await handle.getFileHandle("bizdeck-backup-"+stamp+".json", { create:true });
-    const w = await fh.createWritable(); await w.write(json); await w.close();
+    await writeFileToDirectory(handle, "bizdeck-backup-"+stamp+".json", json);
 
     // Also keep one fixed, always-current copy for easy restoring.
-    const lfh = await handle.getFileHandle("bizdeck-backup-latest.json", { create:true });
-    const lw = await lfh.createWritable(); await lw.write(json); await lw.close();
+    await writeFileToDirectory(handle, "bizdeck-backup-latest.json", json);
 
     await pruneCloudBackups(handle);
 
@@ -5451,7 +5541,7 @@ async function backupToCloudFolder(silent){
     render();
     return true;
   }catch(err){
-    if(!silent) showToast("Couldn't save the backup to your cloud folder.", "error");
+    if(!silent) showToast("Couldn't write to that folder — your cloud app (Drive/OneDrive/etc.) may be syncing or locking it right now. Wait a moment and tap Backup now again.", "error");
     return false;
   }
 }
@@ -5480,7 +5570,6 @@ function importFromFile(file){
 
 function completeImportWithCredentials(){
   const importForm = state.importForm || {};
-  const email = (importForm.email || "").trim().toLowerCase();
   const password = importForm.password || "";
   const data = state.modal?.data;
   
@@ -5489,18 +5578,30 @@ function completeImportWithCredentials(){
     return;
   }
   
+  const email = (data.license.email || "").trim().toLowerCase();
+  
   if(!email || !password) {
-    showToast("Please enter your email and password", "error");
+    showToast("Please enter your password", "error");
     return;
   }
   
   // Validate credentials against the license
   const enteredHash = simpleHash(email + password);
-  if(email !== data.license.email || enteredHash !== data.license.keyHash) {
-    showToast("Incorrect email or password for this account", "error");
+  if(enteredHash !== data.license.keyHash) {
+    showToast("Incorrect password for this account", "error");
     return;
   }
   
+  // Restore which business vertical this account was set up as (Tailoring,
+  // Restaurant, etc). Older backups made before this field existed fall
+  // back to "others" so the person can still get into the app; they can
+  // switch the vertical again if it's wrong.
+  state.businessCategory = (data.businessCategory && CATEGORY_CONFIG[data.businessCategory]) ? data.businessCategory : "others";
+  state.pendingCategory = null;
+  state.universalAccess = !!data.universalAccess;
+  persistBusinessCategory();
+  persistUniversalAccess();
+
   // Restore account data
   state.clients = data.clients || [];
   state.orders = data.orders || [];
