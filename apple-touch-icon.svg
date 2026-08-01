@@ -1,0 +1,52 @@
+<svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background with rounded corners -->
+  <rect width="180" height="180" fill="white" rx="40"/>
+  
+  <!-- Gradient background -->
+  <defs>
+    <linearGradient id="appleBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0052CC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#001F6D;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main background shape -->
+  <rect x="15" y="15" width="150" height="150" rx="32" fill="url(#appleBgGradient)"/>
+  
+  <!-- Main "B" shape -->
+  <path d="M 50 38 L 100 38 Q 120 38 120 55 L 120 73 Q 120 85 107 90 Q 125 97 125 113 L 125 135 Q 125 150 108 150 L 50 150 Z" fill="#0052CC" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  
+  <!-- Left vertical bar (white) -->
+  <rect x="60" y="45" width="12" height="100" fill="white" rx="2"/>
+  
+  <!-- Top curve (white) -->
+  <path d="M 75 45 Q 112 45 112 63 Q 112 77 100 82 L 75 82 Z" fill="white"/>
+  
+  <!-- Middle section -->
+  <path d="M 75 82 L 100 82 Q 112 85 112 98 L 75 98 Z" fill="white"/>
+  
+  <!-- Bottom curve -->
+  <path d="M 75 98 Q 112 98 112 120 Q 112 140 93 145 L 75 145 Z" fill="white"/>
+  
+  <!-- Chart bars -->
+  <g transform="translate(52, 55)">
+    <!-- Bar 1 - Blue -->
+    <rect x="18" y="35" width="8" height="25" fill="#0052CC" rx="1"/>
+    
+    <!-- Bar 2 - Teal -->
+    <rect x="30" y="25" width="8" height="35" fill="#00C7B7" rx="1"/>
+    
+    <!-- Bar 3 - Green -->
+    <rect x="42" y="12" width="8" height="48" fill="#00D084" rx="1"/>
+    
+    <!-- Arrow -->
+    <path d="M 58 30 Q 65 18 75 8" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="75,8 82,10 72,18" fill="white"/>
+  </g>
+  
+  <!-- Subtle shadow for depth -->
+  <filter id="appleShadow">
+    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+  </filter>
+  <rect x="15" y="15" width="150" height="150" rx="32" fill="none" stroke="black" stroke-width="0" filter="url(#appleShadow)"/>
+</svg>

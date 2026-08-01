@@ -1,6 +1,6 @@
 {
   "id": "/",
-  "name": "BizDeck",
+  "name": "BizDeck - Manage. Track. Grow.",
   "short_name": "BizDeck",
   "description": "Run your business from your pocket — clients, records, catalogue, invoicing and more, offline-first on your device.",
   "start_url": "./index.html",
@@ -8,11 +8,12 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#ffffff",
+  "background_color": "#E7E1D3",
   "theme_color": "#1E3A3A",
   "lang": "en",
   "dir": "ltr",
   "categories": ["business", "productivity", "finance"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "favicon-16.png",
@@ -27,9 +28,21 @@
       "purpose": "any"
     },
     {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
@@ -39,16 +52,98 @@
       "purpose": "any"
     },
     {
+      "src": "icon-512-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
       "src": "icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
+      "src": "apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "View Dashboard",
+      "short_name": "Dashboard",
+      "description": "View your business dashboard and analytics",
+      "url": "./index.html?tab=dashboard",
+      "icons": [
+        {
+          "src": "icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "View Clients",
+      "short_name": "Clients",
+      "description": "Quick access to your client list",
+      "url": "./index.html?tab=clients",
+      "icons": [
+        {
+          "src": "icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Create Record",
+      "short_name": "New Record",
+      "description": "Quickly create a new business record",
+      "url": "./index.html?tab=records",
+      "icons": [
+        {
+          "src": "icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "View Catalogue",
+      "short_name": "Catalogue",
+      "description": "Browse your product catalogue",
+      "url": "./index.html?tab=catalogue",
+      "icons": [
+        {
+          "src": "icon-192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
+        }
+      ]
     }
   ]
 }

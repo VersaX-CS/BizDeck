@@ -1,0 +1,63 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background -->
+  <rect width="512" height="512" fill="white"/>
+  
+  <!-- Main "B" shape background with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0052CC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#001F6D;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded rectangle background -->
+  <rect x="60" y="60" width="392" height="392" rx="80" fill="url(#bgGradient)"/>
+  
+  <!-- Main "B" shape -->
+  <path d="M 150 120 L 280 120 Q 320 120 320 160 L 320 210 Q 320 240 290 250 Q 330 265 330 310 L 330 360 Q 330 400 290 400 L 150 400 Z" fill="#0052CC" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+  
+  <!-- Left vertical bar (white) -->
+  <rect x="165" y="135" width="35" height="260" fill="white" rx="6"/>
+  
+  <!-- Top curve (white) -->
+  <path d="M 210 135 Q 300 135 300 170 Q 300 200 275 210 L 210 210 Z" fill="white"/>
+  
+  <!-- Middle section (white) -->
+  <path d="M 210 210 L 275 210 Q 300 220 300 250 L 210 250 Z" fill="white"/>
+  
+  <!-- Bottom curve (white) -->
+  <path d="M 210 250 Q 300 250 300 305 Q 300 340 265 365 L 210 365 Z" fill="white"/>
+  
+  <!-- Chart bars group -->
+  <g transform="translate(160, 170)">
+    <!-- Background for bars -->
+    <rect x="40" y="40" width="130" height="140" fill="rgba(255,255,255,0.1)" rx="8"/>
+    
+    <!-- Bar 1 - Blue -->
+    <rect x="50" y="95" width="22" height="65" fill="#0052CC" rx="3"/>
+    
+    <!-- Bar 2 - Teal to Green transition -->
+    <defs>
+      <linearGradient id="barGradient2" x1="0%" y1="100%" x2="0%" y2="0%">
+        <stop offset="0%" style="stop-color:#00C7B7;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#00D084;stop-opacity:1" />
+      </linearGradient>
+    </defs>
+    <rect x="80" y="65" width="22" height="95" fill="url(#barGradient2)" rx="3"/>
+    
+    <!-- Bar 3 - Green -->
+    <rect x="110" y="30" width="22" height="130" fill="#00D084" rx="3"/>
+    
+    <!-- Upward arrow curved with gradient -->
+    <path d="M 160 90 Q 175 50 200 20" stroke="white" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.2))"/>
+    
+    <!-- Arrow head -->
+    <polygon points="200,20 218,28 205,48" fill="white" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.2))"/>
+  </g>
+  
+  <!-- Shadow effect -->
+  <filter id="shadow">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.15"/>
+  </filter>
+  <rect x="60" y="60" width="392" height="392" rx="80" fill="none" stroke="black" stroke-width="0" filter="url(#shadow)"/>
+</svg>
