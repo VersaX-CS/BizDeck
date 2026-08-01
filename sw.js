@@ -1,6 +1,6 @@
 // Bump this string on every deploy (or leave as-is — the network-first
 // strategy below means most updates show up immediately regardless).
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = "bizdeck-" + CACHE_VERSION;
 
 const APP_SHELL = [
