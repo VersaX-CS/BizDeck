@@ -149,6 +149,13 @@
   .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
   .modal-title{font-family:'Fraunces',serif;font-size:19px;font-weight:600;margin:0;}
 
+  .confirmwrap{position:fixed;inset:0;background:rgba(20,20,15,0.62);display:flex;
+    align-items:center;justify-content:center;z-index:80;padding:20px;}
+  .confirmbox{background:var(--surface);border-radius:14px;width:100%;max-width:340px;padding:20px;box-shadow:0 12px 32px rgba(0,0,0,0.25);}
+  .confirmbox .disp{font-family:'Fraunces',serif;font-size:16px;font-weight:600;margin-bottom:8px;}
+  .confirmbox p{font-size:13px;color:var(--ink-soft);line-height:1.55;margin:0 0 18px;}
+  .confirmbox .btnrow{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+
   .logo-upload{width:88px;height:88px;border-radius:16px;border:1.5px dashed var(--line);background:var(--surface);
     display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--ink-soft);flex-shrink:0;}
   .logo-upload img{width:100%;height:100%;object-fit:cover;}
@@ -301,6 +308,7 @@ const ICONS = {
   arrowDown:'<path d="M12 5v14M6 13l6 6 6-6"/>',
   ledger:'<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18v18H6.5A1.5 1.5 0 0 1 5 19.5v-15z"/><path d="M8 3v18"/><path d="M11 8h5M11 11.5h5"/>',
   cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-8.98A6 6 0 0 1 18 8.5a4 4 0 0 1-1 7.5H7z"/><path d="M12 12v6M9.5 15.5L12 18l2.5-2.5"/>',
+  home:'<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"/><path d="M10 21v-6h4v6"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -338,13 +346,14 @@ function createLicense(){
 }
 function notifyBeforeTour(){
   if(!state.tourNotified && state.authed){
-    const ok = confirm("👋 Welcome to your account! Would you like a guided tour of the app features? (You can replay it anytime from Account settings.)");
     state.tourNotified = true;
-    if(ok){
-      state.tour = true;
-      state.tourIndex = 0;
-    }
-    render();
+    askConfirm({
+      title: "Welcome to your account! 👋",
+      body: "Would you like a guided tour of the app features? You can replay it anytime from Account > General.",
+      confirmLabel: "Take the tour",
+      cancelLabel: "Skip",
+      onConfirm: () => { state.tour = true; state.tourIndex = 0; render(); }
+    });
   }
 }
 function notifyBeforeClose(){
@@ -801,6 +810,9 @@ const state = {
   expenses: [],
   booksView: "expenses", // expenses | vendors | pnl
   booksPeriod: "month", // month | lastmonth | all
+  accountView: "account", // account | general
+  confirmDialog: null, // {title, body, confirmLabel, cancelLabel, danger, onConfirm}
+  alertDialog: null, // {title, body}
   business: { name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
   backupSettings: { enabled:false, frequency:"weekly", lastBackupAt:null },
   cloudBackup: { connected:false, folderName:null, lastBackupAt:null, autoSync:false, permissionGranted:false },
@@ -1488,7 +1500,7 @@ function render(){
 
   if(!state.authed){
     state.tour = null; renderTourOverlay();
-    app.innerHTML = renderAuthView() + renderModal();
+    app.innerHTML = renderAuthView() + renderModal() + renderConfirmDialog() + renderAlertDialog();
     if(!biometricAutoAttempted && (state.authMode||"signin")==="signin" && hasBiometricForAccount()){
       biometricAutoAttempted = true;
       setTimeout(() => tryBiometricSignIn(true), 350);
@@ -1543,7 +1555,7 @@ function render(){
         NAV.map(n => '<div class="navtab '+(state.tab===n.key?'active':'')+'" data-action="set-tab" data-tab="'+n.key+'">'+icon(n.icon,21)+'<span class="navlabel">'+n.label+'</span></div>').join("")+
       '</div>'+
     '</div>'+
-    renderModal();
+    renderModal() + renderConfirmDialog() + renderAlertDialog();
 
   const contentEl = document.getElementById("content");
   if(contentEl) contentEl.scrollTop = contentScroll;
@@ -2953,51 +2965,53 @@ function initSignaturePad(){
 }
 
 /* ================= ACCOUNT ================= */
+function renderAccountSegmentBar(){
+  return '<div class="chipbar" style="margin-bottom:16px;">'+
+    '<button class="btn '+(state.accountView==="account"?"gold":"ghost")+' sm" data-action="set-account-view" data-view="account">'+icon("account",13)+' Account</button>'+
+    '<button class="btn '+(state.accountView==="general"?"gold":"ghost")+' sm" data-action="set-account-view" data-view="general">'+icon("moon",13)+' General</button>'+
+  '</div>';
+}
 function renderAccount(){
+  return (
+    '<div class="disp" style="font-size:19px;font-weight:600;margin-bottom:16px;">Account</div>'+
+    renderAccountSegmentBar()+
+    (state.accountView === "general" ? renderAccountGeneral() : renderAccountIdentity())
+  );
+}
+function renderAccountIdentity(){
   const b = state.business;
   const logoHtml = b.logo ? '<img src="'+b.logo+'" alt="Business logo">' : icon("upload",20);
   return (
-    '<div class="disp" style="font-size:19px;font-weight:600;margin-bottom:16px;">Account</div>'+
     (state.account && state.auth ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
         '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials</div>'+
-        '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Your unique access key (tied to your email & password). Use this with exported account backups to restore your account on a new device.</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key + password</span>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
         '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-access-key-file">'+icon("download",14)+' Download</button>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
+        '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show Access Key</button>'+
-          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy to clipboard</button>'+
+          '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
         '</div>'+
-      '</div>'
-    : '')+
-    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
-      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Need a refresher?</div>'+
-        '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">Replay the guided tour of the app anytime.</div></div>'+
-      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
-    '</div>'+
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Signed up with the universal key — switch between modules anytime. Your '+esc(nounFor("clientPlural")).toLowerCase()+', '+esc(nounFor("recordPlural")).toLowerCase()+' and '+esc(nounFor("catalogue")).toLowerCase()+' stay the same; only the labels, statuses and extra fields shown change.</div>'+
-        '<div class="chipbar">'+
-          CATEGORY_ORDER.map(key => {
-            const cfg = CATEGORY_CONFIG[key];
-            const active = activeCategoryKey()===key;
-            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
-          }).join("")+
-        '</div>'+
+        '<div style="font-size:10.5px;color:var(--ink-soft);margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately, then delete from Downloads.</div>'+
       '</div>'
     : '')+
     (!state.universalAccess && state.account ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(184,132,46,0.08) 0%, rgba(184,132,46,0.04) 100%);border:1.5px solid var(--gold);position:relative;overflow:hidden;">'+
         '<div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:var(--gold);opacity:0.08;border-radius:50%;"></div>'+
         '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:4px;color:var(--gold);">🚀 Upgrade to Premium</div>'+
-        '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">You\'re currently limited to <strong style="color:var(--ink);">'+esc(activeCatCfg().label)+'</strong> only.</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Currently: '+esc(activeCatCfg().label)+' only</span>'+
         '<div style="font-size:13px;color:var(--ink);margin-bottom:12px;background:var(--surface);padding:10px;border-radius:8px;">'+
-          '<strong>Premium Access includes:</strong><br>'+
-          '✓ Access all 8 business modules<br>'+
-          '✓ Switch between modules anytime<br>'+
-          '✓ Shared data across all modules<br>'+
-          '✓ One account, unlimited flexibility'+
+          '✓ All 8 business modules<br>'+
+          '✓ Switch modules anytime<br>'+
+          '✓ Shared data across modules'+
         '</div>'+
         '<button class="btn gold" style="width:100%;justify-content:center;margin-bottom:8px;" data-action="open-upgrade-modal">'+icon("plus",14)+' Unlock Premium Access</button>'+
       '</div>'
@@ -3007,7 +3021,7 @@ function renderAccount(){
       '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">'+
         '<label class="logo-upload">'+logoHtml+'<input type="file" accept="image/*" data-action="upload-logo" style="display:none;"></label>'+
         '<div><div style="font-size:13px;font-weight:500;">Business logo</div>'+
-        '<div style="font-size:12px;color:var(--ink-soft);margin-top:2px;max-width:280px;">Tap the box to upload. Shown in the header and on shared invoices and receipts.</div></div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:4px;">Header + invoices</span></div>'+
       '</div>'+
       '<div class="grid-form2">'+
         '<div><label>Business name</label><input data-bind="business.name" value="'+esc(b.name)+'"></div>'+
@@ -3019,7 +3033,7 @@ function renderAccount(){
     '</div>'+
     '<div class="card" style="margin-bottom:16px;" data-tour-target="bank-details">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Bank account details</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Shown on invoices so clients know where to pay. Add more than one if you use several banks.</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Shown on invoices</span>'+
       (b.bankAccounts||[]).map((acc,i) => (
         '<div class="bank-entry">'+
           '<button class="iconbtn" data-action="remove-bank-account" data-index="'+i+'" style="position:absolute;top:10px;right:10px;" aria-label="Remove">'+icon("x",13)+'</button>'+
@@ -3035,9 +3049,54 @@ function renderAccount(){
     '</div>'+
     renderSignatureCard(b)+
     renderBillingCard(b)+
+    '<div class="card" style="margin-top:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
+      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
+    '</div>'+
+    '<div class="card" style="margin-top:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Contact the developer</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Support / bug report</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+        '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I have a query/complaint about "+esc(b.name||"BizDeck")+": ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
+        '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
+        '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
+      '</div>'+
+      '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'<br>'+esc(DEV_EMAIL)+' · '+esc(DEV_PHONE)+'</div>'+
+      '<div style="border-top:1px solid var(--line);padding-top:12px;">'+
+        '<div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div>'+
+        '<div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">'+
+          esc(SUPPORT_BANK)+'<br>'+
+          esc(SUPPORT_ACCOUNT_NAME)+'<br>'+
+          '<span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span>'+
+        '</div>'+
+        '<button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy account number</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+function renderAccountGeneral(){
+  return (
+    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
+      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
+      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
+    '</div>'+
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Universal key</span>'+
+        '<div class="chipbar">'+
+          CATEGORY_ORDER.map(key => {
+            const cfg = CATEGORY_CONFIG[key];
+            const active = activeCategoryKey()===key;
+            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
+          }).join("")+
+        '</div>'+
+      '</div>'
+    : '')+
     '<div class="card" style="margin-bottom:16px;" data-tour-target="manage-catalogue">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Manage catalogue</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Add categories, priced items and photos here. Clients browse and get sent these from the Catalogue tab.</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Categories, items, photos</span>'+
       renderCatalogueManager()+
     '</div>'+
     '<div class="card" data-tour-target="appearance">'+
@@ -3069,40 +3128,36 @@ function renderAccount(){
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
         '<div style="display:flex;align-items:center;gap:10px;">'+
           '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
-          '<div><div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
-            '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:1px;">Keeps your chosen colour, swaps the background to dark.</div></div>'+
+          '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
         '</div>'+
         '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
       '</div>'+
     '</div>'+
     '<div class="card" style="margin-top:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup &amp; transfer</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Your data is stored only on this device. <strong style="color:var(--ink);">⚠️ Export a backup file regularly for safety.</strong> Use it to move your account to another device.</div>'+
-      '<div style="background:var(--rust-soft);border-left:4px solid var(--rust);padding:10px;border-radius:4px;margin-bottom:12px;font-size:12px;color:var(--rust);">'+
-        '<strong>Security Notice:</strong> Account backups include your credentials and are tied to your email & password. Keep them secure. Recommended: Save backups in a secure location and delete them after restoring to a new device.'+
-      '</div>'+
-      '<div style="font-size:12.5px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Recommended: Account backup with credentials</div>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Account backup (with credentials)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-        '<button class="btn gold sm" data-action="export-with-license">'+icon("download",14)+' Export account backup</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import account backup'+
+        '<button class="btn gold sm" data-action="export-with-license">'+icon("download",14)+' Export</button>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept=".bizdeck" data-action="import-from-file" style="display:none;">'+
         '</label>'+
       '</div>'+
-      '<div style="font-size:12.5px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backups (data only)</div>'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Basic backup (data only)</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export backup (no credentials)</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import backup'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export</button>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import'+
           '<input type="file" accept="application/json" data-action="import-data-file" style="display:none;">'+
         '</label>'+
-        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-file">'+icon("send",14)+' Share backup file</button>' : '')+
+        (navigator.share ? '<button class="btn ghost sm" data-action="share-backup-file">'+icon("send",14)+' Share</button>' : '')+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
-        '<button class="btn ghost sm" data-action="export-csv-clients">'+icon("download",14)+' Export '+nounFor("clientPlural").toLowerCase()+' (CSV)</button>'+
-        '<button class="btn ghost sm" data-action="export-csv-orders">'+icon("download",14)+' Export '+nounFor("recordPlural").toLowerCase()+' (CSV)</button>'+
+        '<button class="btn ghost sm" data-action="export-csv-clients">'+icon("download",14)+' '+nounFor("clientPlural")+' (CSV)</button>'+
+        '<button class="btn ghost sm" data-action="export-csv-orders">'+icon("download",14)+' '+nounFor("recordPlural")+' (CSV)</button>'+
       '</div>'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">'+
         '<div><div style="font-size:13px;font-weight:500;">Automatic backup</div>'+
-        '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">'+autoBackupStatusText()+'</div></div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+autoBackupStatusText()+'</span></div>'+
         '<label class="switch"><input type="checkbox" data-action="toggle-auto-backup" '+(state.backupSettings.enabled?"checked":"")+'><span class="slider"></span></label>'+
       '</div>'+
       (state.backupSettings.enabled ?
@@ -3116,11 +3171,9 @@ function renderAccount(){
         '<div class="icon-badge" style="background:var(--green-soft);color:var(--green);">'+icon("cloud",16)+'</div>'+
         '<div class="disp" style="font-weight:600;font-size:14.5px;">Cloud backup</div>'+
       '</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">'+
-        (supportsFSAccess() ?
-          'Choose a folder on this device that syncs to your cloud drive — Google Drive, OneDrive, Dropbox, iCloud Drive, or any other. BizDeck writes backup files straight into it; your cloud provider takes care of uploading them.'
-          : 'This browser can\'t write directly into a folder. Use <strong>Share backup file</strong> above and pick your cloud drive app (Google Drive, OneDrive, Dropbox...) from the share sheet, or open BizDeck in Chrome/Edge on a computer for one-tap folder backups.')+
-      '</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+
+        (supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+
+      '</span>'+
       (!supportsFSAccess() ? '' :
         !state.cloudBackup.connected ?
           '<button class="btn gold sm" data-action="connect-cloud-folder">'+icon("cloud",14)+' Choose cloud folder</button>'
@@ -3130,7 +3183,7 @@ function renderAccount(){
             '<div style="min-width:0;">'+
               '<div style="font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Connected: '+esc(state.cloudBackup.folderName||"")+'</div>'+
               '<div style="font-size:11px;color:var(--ink-soft);">'+
-                (state.cloudBackup.permissionGranted===false ? 'Permission needs to be renewed — tap Backup now.' :
+                (state.cloudBackup.permissionGranted===false ? 'Permission needs renewal — tap Backup now.' :
                   (state.cloudBackup.lastBackupAt ? "Last saved "+fmtDateTime(new Date(state.cloudBackup.lastBackupAt)) : "No backup saved yet"))+
               '</div>'+
             '</div>'+
@@ -3142,50 +3195,27 @@ function renderAccount(){
           '</div>'+
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;border-top:1px solid var(--line);">'+
             '<div><div style="font-size:13px;font-weight:500;">Include in automatic backups</div>'+
-              '<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">'+
+              '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+
                 (state.backupSettings.enabled ?
-                  'Also saves here whenever an automatic backup runs ('+({daily:"daily",weekly:"weekly",monthly:"monthly"}[state.backupSettings.frequency]||"weekly")+').'
-                  : 'Turn on Automatic backup above to enable this.')+
-              '</div>'+
+                  'Runs '+({daily:"daily",weekly:"weekly",monthly:"monthly"}[state.backupSettings.frequency]||"weekly")
+                  : 'Enable Automatic backup first')+
+              '</span>'+
             '</div>'+
             '<label class="switch"><input type="checkbox" data-action="toggle-cloud-auto-sync" '+(state.cloudBackup.autoSync?"checked":"")+(state.backupSettings.enabled?"":" disabled")+'><span class="slider"></span></label>'+
           '</div>'
       )+
     '</div>'+
-    '<div class="card" style="margin-top:16px;border-color:var(--rust);" data-tour-target="danger-zone">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Permanently erase every '+nounFor("client").toLowerCase()+', '+nounFor("record").toLowerCase()+', '+nounFor("catalogue").toLowerCase()+' item, business profile and setting stored on this device, and return the app to its default, freshly-installed state. Export a backup first if you might need this data again — you can restore it with Import backup above.</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export backup first</button>'+
-        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app to default</button>'+
-      '</div>'+
-    '</div>'+
-    '<div class="card" style="margin-top:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Signed in with '+esc((state.account&&state.account.email)||DEMO_EMAIL)+'.</div>'+
-      '<button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button>'+
-    '</div>'+
     '<div class="card" style="margin-top:16px;">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Data &amp; privacy note</div>'+
-      policyBodyHtml()+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Storage, backups, access, indemnity</span>'+
+      '<div><button class="btn ghost sm" data-action="open-policy-modal">'+icon("help",14)+' View policy</button></div>'+
     '</div>'+
-    '<div class="card" style="margin-top:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Contact the developer</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Got a query, complaint, or bug to report? Reach out directly.</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
-        '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I have a query/complaint about "+esc(b.name||"BizDeck")+": ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
-        '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
-        '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
-      '</div>'+
-      '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'<br>'+esc(DEV_EMAIL)+' · '+esc(DEV_PHONE)+'</div>'+
-      '<div style="border-top:1px solid var(--line);padding-top:12px;">'+
-        '<div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div>'+
-        '<div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">'+
-          esc(SUPPORT_BANK)+'<br>'+
-          esc(SUPPORT_ACCOUNT_NAME)+'<br>'+
-          '<span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span>'+
-        '</div>'+
-        '<button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy account number</button>'+
+    '<div class="card" style="margin-top:16px;border-color:var(--rust);" data-tour-target="danger-zone">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything on this device</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
+        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
       '</div>'+
     '</div>'
   );
@@ -3209,6 +3239,7 @@ function renderModal(){
   if(state.modal.type==="contact-dev") return renderContactDevModal();
   if(state.modal.type==="upgrade-access") return renderUpgradeAccessModal();
   if(state.modal.type==="import-license") return renderImportLicenseModal();
+  if(state.modal.type==="policy") return renderPolicyModal();
   return "";
 }
 function modalShell(title, bodyHtml, variant){
@@ -3218,6 +3249,51 @@ function modalShell(title, bodyHtml, variant){
       '<button class="iconbtn" data-action="close-modal" aria-label="Close">'+icon("close",16)+'</button></div>'+
     bodyHtml+
   '</div></div>';
+}
+
+/* ================= IN-APP CONFIRM / ALERT DIALOGS ================= */
+// Replaces native confirm()/alert() browser dialogs.
+function askConfirm(opts){
+  state.confirmDialog = {
+    title: opts.title || "Are you sure?",
+    body: opts.body || "",
+    confirmLabel: opts.confirmLabel || "Confirm",
+    cancelLabel: opts.cancelLabel || "Cancel",
+    danger: !!opts.danger,
+    onConfirm: opts.onConfirm || function(){}
+  };
+  render();
+}
+function showAlertDialog(body, title){
+  state.alertDialog = { title: title || "Notice", body: body || "" };
+  render();
+}
+function renderConfirmDialog(){
+  if(!state.confirmDialog) return "";
+  const d = state.confirmDialog;
+  return '<div class="confirmwrap" data-action="confirm-backdrop">'+
+    '<div class="confirmbox" data-stop="1">'+
+      '<div class="disp">'+esc(d.title)+'</div>'+
+      (d.body ? '<p>'+esc(d.body)+'</p>' : '')+
+      '<div class="btnrow">'+
+        '<button class="btn ghost sm" data-action="confirm-cancel">'+esc(d.cancelLabel)+'</button>'+
+        '<button class="btn '+(d.danger?"rust":"gold")+' sm" data-action="confirm-yes">'+esc(d.confirmLabel)+'</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+function renderAlertDialog(){
+  if(!state.alertDialog) return "";
+  const d = state.alertDialog;
+  return '<div class="confirmwrap" data-action="alert-backdrop">'+
+    '<div class="confirmbox" data-stop="1">'+
+      '<div class="disp">'+esc(d.title)+'</div>'+
+      (d.body ? '<p>'+esc(d.body)+'</p>' : '')+
+      '<div class="btnrow">'+
+        '<button class="btn gold sm" data-action="alert-ok">OK</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
 }
 function policyBodyHtml(){
   return '<div style="font-size:12.5px;color:var(--ink-soft);line-height:1.7;">'+
@@ -3235,6 +3311,9 @@ function policyBodyHtml(){
     '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Notifications on signup and exit</p>'+
     '<p style="margin:0;">When you create a new account, you\u2019ll be asked if you\u2019d like a guided tour before we show the app. When you\u2019re about to leave the app (close the tab or browser), a reminder about backups will appear — take the moment to export one if it\u2019s been a while.</p>'+
   '</div>';
+}
+function renderPolicyModal(){
+  return modalShell("Data & privacy policy", policyBodyHtml());
 }
 function renderContactDevModal(){
   return modalShell("Contact the developer",
@@ -3939,7 +4018,7 @@ function renderCategoryPickerView(){
           '<div style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;">Pick a category to set up the right tools for your business. This choice is permanent on this device — you\'ll sign up with an access key next.</div>'+
         '</div>'+
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">'+
-          CATEGORY_ORDER.map(key => {
+          CATEGORY_ORDER.filter(key => key !== "admin").map(key => {
             const cfg = CATEGORY_CONFIG[key];
             return '<button type="button" class="card" data-action="choose-category" data-cat="'+key+'" style="text-align:left;display:flex;gap:12px;align-items:flex-start;border:none;">'+
               '<div class="icon-badge" style="background:var(--gold-soft);color:#8A5F1F;flex-shrink:0;">'+icon(cfg.icon,17)+'</div>'+
@@ -4052,7 +4131,7 @@ function openClientModal(existing){
 }
 async function pickContactPhone(){
   if(!(navigator.contacts && navigator.contacts.select)){
-    alert("Picking from contacts isn't supported on this browser/device. You can still type the number in manually.");
+    showAlertDialog("Picking from contacts isn't supported on this browser/device. You can still type the number in manually.");
     return;
   }
   try{
@@ -4252,25 +4331,25 @@ function getTourSteps(){
     { tab:"catalogue", getTarget:()=>document.querySelector('#content [data-action="share-pricelist-image"]'),
       title:"Share your price list",
       body:"Send your whole "+catalogueWord+" as a neat image straight to WhatsApp, or download it to share anywhere." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="business-profile"]'),
+    { tab:"account", view:"account", getTarget:()=>document.querySelector('[data-tour-target="business-profile"]'),
       title:"Business profile",
       body:"Your business name, logo, phone, address and registration number — used on every invoice, receipt and shared price list." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="bank-details"]'),
+    { tab:"account", view:"account", getTarget:()=>document.querySelector('[data-tour-target="bank-details"]'),
       title:"Bank details",
       body:"Add one or more bank accounts here so "+clientsWord+" know exactly where to pay — they'll appear automatically on invoices with a balance due." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="category-gallery"]'),
+    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="category-gallery"]'),
       title:"Photo gallery",
       body:"Upload photos for each category — "+clientsWord+" see these when browsing your "+catalogueWord+". Tap a photo to view it full-screen." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="manage-catalogue"]'),
+    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="manage-catalogue"]'),
       title:"Manage "+catalogueWord,
       body:"This is where you build what shows up in the "+nounFor("catalogue")+" tab — add categories, upload gallery photos, and create priced items." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="appearance"]'),
+    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="appearance"]'),
       title:"Appearance",
       body:"Pick a color theme for the whole app, or tap the palette swatch to build your own personalized colours from scratch." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="dark-mode"]'),
+    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="dark-mode"]'),
       title:"Dark mode",
       body:"Switch this on anytime for a dark background — it keeps whichever color theme you picked, so your brand colors stay the same." },
-    { tab:"account", getTarget:()=>document.querySelector('[data-tour-target="backup-transfer"]'),
+    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="backup-transfer"]'),
       title:"Backup & transfer",
       body:"Your data lives only on this device. Export a backup regularly, or turn on automatic backups so you never lose your records." },
     { title:"You're all set",
@@ -4303,6 +4382,7 @@ function goToTourStep(i){
     if(wasHome && step.tab !== "dashboard") pushNav();
     else if(!wasHome && step.tab === "dashboard") collapseNav(1);
   }
+  if(step.tab === "account") state.accountView = step.view || "account";
   render();
 }
 function nextTour(){ if(state.tour) goToTourStep(state.tour.step + 1); }
@@ -4368,8 +4448,14 @@ function paintTourOverlay(overlay, step, target, idx, total){
 
 document.addEventListener("click", (e) => {
   const stop = e.target.closest('[data-stop]');
-  const backdrop = e.target.closest('[data-action="modal-backdrop"]');
-  if(backdrop && !stop && e.target === backdrop){ closeModal(); return; }
+  const backdrop = e.target.closest('[data-action="modal-backdrop"], [data-action="confirm-backdrop"], [data-action="alert-backdrop"]');
+  if(backdrop && !stop && e.target === backdrop){
+    const bact = backdrop.getAttribute("data-action");
+    if(bact === "modal-backdrop") closeModal();
+    else if(bact === "confirm-backdrop"){ state.confirmDialog = null; render(); }
+    else if(bact === "alert-backdrop"){ state.alertDialog = null; render(); }
+    return;
+  }
 
   const el = e.target.closest("[data-action]");
   if(!el) return;
@@ -4382,6 +4468,9 @@ document.addEventListener("click", (e) => {
   }
 
   switch(action){
+    case "confirm-yes": { const cb = state.confirmDialog && state.confirmDialog.onConfirm; state.confirmDialog = null; if(cb) cb(); else render(); break; }
+    case "confirm-cancel": state.confirmDialog = null; render(); break;
+    case "alert-ok": state.alertDialog = null; render(); break;
     case "start-tour": startTour(); break;
     case "dismiss-tour-banner": markTourSeen(); render(); break;
     case "set-tab": {
@@ -4393,9 +4482,10 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
+    case "set-account-view": state.accountView = el.getAttribute("data-view"); render(); break;
     case "select-client": state.selectedClientId = id; pushNav(); render(); break;
     case "back-to-clients": state.selectedClientId = null; collapseNav(1); render(); break;
-    case "delete-client": if(confirm("Delete this client? This cannot be undone.")){ state.clients = state.clients.filter(c=>c.id!==id); if(state.selectedClientId===id){ state.selectedClientId=null; collapseNav(1); } persistClients(); render(); } break;
+    case "delete-client": askConfirm({ title:"Delete this client?", body:"This cannot be undone.", confirmLabel:"Delete", danger:true, onConfirm: () => { state.clients = state.clients.filter(c=>c.id!==id); if(state.selectedClientId===id){ state.selectedClientId=null; collapseNav(1); } persistClients(); render(); } }); break;
     case "open-client-modal-new": openClientModal(null); break;
     case "open-client-modal": openClientModal(findClient(id)); break;
     case "pick-contact-phone": pickContactPhone(); break;
@@ -4413,6 +4503,7 @@ document.addEventListener("click", (e) => {
     case "open-order-modal-new-for-client": openOrderModal(null, id); break;
     case "open-order-modal": openOrderModal(findOrder(id)); break;
     case "open-notifications": state.modal = { type:"notifications" }; pushNav(); render(); break;
+    case "open-policy-modal": state.modal = { type:"policy" }; pushNav(); render(); break;
     case "open-global-search": state.modal = { type:"global-search" }; state.globalSearchQ = ""; pushNav(); render();
       setTimeout(()=>{ const el = document.getElementById("globalSearchInput"); if(el) el.focus(); }, 30);
       break;
@@ -4456,12 +4547,12 @@ document.addEventListener("click", (e) => {
       const saved = saveOrderDraft();
       if(saved && saved.recurring && saved.recurring.enabled){
         generateRecurringInvoice(saved);
-        alert("Generated the next invoice. Next renewal is due "+fmtDate(saved.recurring.nextDate)+".");
+        showAlertDialog("Generated the next invoice. Next renewal is due "+fmtDate(saved.recurring.nextDate)+".");
       }
       closeModal();
       break;
     }
-    case "delete-order": if(confirm("Delete this "+(isQuoteRecord(state.modal.draft)?"quote":"order")+"?")){ const o=state.modal.draft; state.orders = state.orders.filter(x=>x.id!==o.id); persistOrders(); closeModal(); } break;
+    case "delete-order": { const isQuote = isQuoteRecord(state.modal.draft); askConfirm({ title:"Delete this "+(isQuote?"quote":"order")+"?", confirmLabel:"Delete", danger:true, onConfirm: () => { const o=state.modal.draft; state.orders = state.orders.filter(x=>x.id!==o.id); persistOrders(); closeModal(); } }); break; }
     case "duplicate-order": {
       const src = state.modal.draft;
       const copy = JSON.parse(JSON.stringify(src));
@@ -4493,7 +4584,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "convert-quote-to-order": {
-      if(confirm("Convert this quote to an order? It will move to your Orders list.")){
+      askConfirm({ title:"Convert this quote to an order?", body:"It will move to your Orders list.", confirmLabel:"Convert", onConfirm: () => {
         const o = state.modal.draft;
         o.kind = "order";
         o.status = currentStatuses()[0].key;
@@ -4505,7 +4596,7 @@ document.addEventListener("click", (e) => {
         persistOrders();
         state.orderKind = "order";
         closeModal();
-      }
+      }});
       break;
     }
     case "set-order-kind-view": {
@@ -4553,12 +4644,12 @@ document.addEventListener("click", (e) => {
       persistCatalogue(); render();
       break;
     }
-    case "delete-category": if(confirm('Delete this category and its items?')){
+    case "delete-category": askConfirm({ title:"Delete this category?", body:"Its items will also be deleted.", confirmLabel:"Delete", danger:true, onConfirm: () => {
       state.catalogue.items = state.catalogue.items.filter(i=>i.categoryId!==id);
       state.catalogue.categories = state.catalogue.categories.filter(c=>c.id!==id);
       state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
       persistCatalogue(); render();
-    } break;
+    }}); break;
     case "share-invoice-image": {
       const o = state.modal.draft; const client = findClient(o.clientId); const kind = el.getAttribute("data-kind")||"invoice";
       shareInvoiceImage(o, client, kind, "share");
@@ -4621,7 +4712,7 @@ document.addEventListener("click", (e) => {
       persistCatalogue(); closeModal();
       break;
     }
-    case "delete-catitem": if(confirm("Delete this item?")){ const it=state.modal.draft; state.catalogue.items = state.catalogue.items.filter(x=>x.id!==it.id); persistCatalogue(); closeModal(); } break;
+    case "delete-catitem": askConfirm({ title:"Delete this item?", confirmLabel:"Delete", danger:true, onConfirm: () => { const it=state.modal.draft; state.catalogue.items = state.catalogue.items.filter(x=>x.id!==it.id); persistCatalogue(); closeModal(); } }); break;
 
     case "open-inv-modal-new": openInvItemModal(null); break;
     case "open-inv-modal": openInvItemModal(findInvItem(id)); break;
@@ -4640,11 +4731,13 @@ document.addEventListener("click", (e) => {
     }
     case "delete-inv-item": {
       const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
-      if(delId && confirm("Delete this stock item? Its movement history will also be removed. This cannot be undone.")){
-        state.inventory.items = state.inventory.items.filter(x=>x.id!==delId);
-        state.inventory.movements = state.inventory.movements.filter(m=>m.itemId!==delId);
-        persistInventory();
-        if(state.modal && state.modal.type==="invitem") closeModal(); else render();
+      if(delId){
+        askConfirm({ title:"Delete this stock item?", body:"Its movement history will also be removed. This cannot be undone.", confirmLabel:"Delete", danger:true, onConfirm: () => {
+          state.inventory.items = state.inventory.items.filter(x=>x.id!==delId);
+          state.inventory.movements = state.inventory.movements.filter(m=>m.itemId!==delId);
+          persistInventory();
+          if(state.modal && state.modal.type==="invitem") closeModal(); else render();
+        }});
       }
       break;
     }
@@ -4679,11 +4772,13 @@ document.addEventListener("click", (e) => {
     }
     case "delete-vendor": {
       const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
-      if(delId && confirm("Delete this vendor? Expenses already logged against them will be kept but unlinked.")){
-        state.vendors = state.vendors.filter(x=>x.id!==delId);
-        state.expenses.forEach(e=>{ if(e.vendorId===delId) e.vendorId=""; });
-        persistVendors(); persistExpenses();
-        if(state.modal && state.modal.type==="vendor") closeModal(); else render();
+      if(delId){
+        askConfirm({ title:"Delete this vendor?", body:"Expenses already logged against them will be kept but unlinked.", confirmLabel:"Delete", danger:true, onConfirm: () => {
+          state.vendors = state.vendors.filter(x=>x.id!==delId);
+          state.expenses.forEach(e=>{ if(e.vendorId===delId) e.vendorId=""; });
+          persistVendors(); persistExpenses();
+          if(state.modal && state.modal.type==="vendor") closeModal(); else render();
+        }});
       }
       break;
     }
@@ -4691,7 +4786,7 @@ document.addEventListener("click", (e) => {
     case "open-expense-modal": openExpenseModal(findExpense(id)); break;
     case "save-expense": {
       const ex = state.modal.draft;
-      if(!ex.amount || Number(ex.amount)<=0){ alert("Enter an amount for this expense."); return; }
+      if(!ex.amount || Number(ex.amount)<=0){ showAlertDialog("Enter an amount for this expense."); return; }
       ex.amount = Number(ex.amount)||0;
       const exists = state.expenses.some(x=>x.id===ex.id);
       state.expenses = exists ? state.expenses.map(x=>x.id===ex.id?ex:x) : state.expenses.concat([ex]);
@@ -4700,10 +4795,12 @@ document.addEventListener("click", (e) => {
     }
     case "delete-expense": {
       const delId = id || (state.modal && state.modal.draft && state.modal.draft.id);
-      if(delId && confirm("Delete this expense? This cannot be undone.")){
-        state.expenses = state.expenses.filter(x=>x.id!==delId);
-        persistExpenses();
-        if(state.modal && state.modal.type==="expense") closeModal(); else render();
+      if(delId){
+        askConfirm({ title:"Delete this expense?", body:"This cannot be undone.", confirmLabel:"Delete", danger:true, onConfirm: () => {
+          state.expenses = state.expenses.filter(x=>x.id!==delId);
+          persistExpenses();
+          if(state.modal && state.modal.type==="expense") closeModal(); else render();
+        }});
       }
       break;
     }
@@ -4726,7 +4823,7 @@ document.addEventListener("click", (e) => {
     case "open-full-gallery": {
       const filterCat = (state.browseCategoryId && state.browseCategoryId!=="__all__") ? state.browseCategoryId : null;
       const g = buildFullGallery(filterCat);
-      if(g.images.length===0){ alert("No photos in the catalogue yet."); break; }
+      if(g.images.length===0){ showAlertDialog("No photos in the catalogue yet."); break; }
       openLightbox(g.images, 0, g.tags);
       break;
     }
@@ -4786,7 +4883,7 @@ document.addEventListener("click", (e) => {
       if(acc && email===acc.email && f.password===acc.password){
         state.authed = true; state.authError = null; state.viewOnly = false;
         if(supportsWebAuthn() && !hasBiometricForAccount()){
-          setTimeout(() => { if(confirm("Enable fingerprint sign-in on this device for next time?")) registerBiometric(); }, 300);
+          setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
         }
       } else if(!acc && email===DEMO_EMAIL && f.password===DEMO_PASSWORD){
         state.authed = true; state.authError = null; state.viewOnly = true;
@@ -4798,7 +4895,7 @@ document.addEventListener("click", (e) => {
         state.business = { name:"Admin Control Panel", logo:"" };
         state.clients = []; state.orders = []; state.catalogue = { categories:[], items:[] };
         if(supportsWebAuthn() && !hasBiometricForAccount()){
-          setTimeout(() => { if(confirm("Enable fingerprint sign-in on this device for next time?")) registerBiometric(); }, 300);
+          setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
         }
       } else {
         state.authError = acc ? "Incorrect email or password." : "Incorrect email or password. Try the demo credentials shown below.";
@@ -4864,7 +4961,7 @@ document.addEventListener("click", (e) => {
         state.tourNotified = false;
         
         if(supportsWebAuthn()){
-          setTimeout(() => { if(confirm("Enable fingerprint sign-in on this device for next time?")) registerBiometric(); }, 300);
+          setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
         }
         
         // Show notification before tour
@@ -4968,7 +5065,7 @@ document.addEventListener("click", (e) => {
     }
     case "save-signature-canvas": {
       const canvas = document.getElementById("sigCanvas");
-      if(!canvas || canvas.dataset.hasDrawn !== "1"){ alert("Please draw your signature first."); break; }
+      if(!canvas || canvas.dataset.hasDrawn !== "1"){ showAlertDialog("Please draw your signature first."); break; }
       state.business.signature.image = canvas.toDataURL("image/png");
       state.business.signature.mode = "draw";
       state.sigRedrawing = false;
@@ -4978,20 +5075,28 @@ document.addEventListener("click", (e) => {
     case "start-signature-redraw": state.sigRedrawing = true; render(); break;
     case "cancel-signature-redraw": state.sigRedrawing = false; render(); break;
     case "remove-signature": {
-      if(confirm("Remove your saved signature?")){
+      askConfirm({ title:"Remove your saved signature?", confirmLabel:"Remove", danger:true, onConfirm: () => {
         state.business.signature.image = null;
         state.sigRedrawing = false;
         persistBusiness(); render();
-      }
+      }});
       break;
     }
     case "export-data": exportBackup(); break;
     case "reset-app-data": {
-      const ok1 = confirm("Reset BizDeck to its default state? This permanently deletes every "+nounFor("client").toLowerCase()+", "+nounFor("record").toLowerCase()+", "+nounFor("catalogue").toLowerCase()+" item, business profile, and setting stored on this device. Export a backup first if you might need this data again.");
-      if(!ok1) break;
-      const ok2 = confirm("This can't be undone. Reset the app now?");
-      if(!ok2) break;
-      resetAppToDefault();
+      askConfirm({
+        title: "Reset BizDeck to its default state?",
+        body: "This permanently deletes every "+nounFor("client").toLowerCase()+", "+nounFor("record").toLowerCase()+", "+nounFor("catalogue").toLowerCase()+" item, business profile, and setting stored on this device. Export a backup first if you might need this data again.",
+        confirmLabel: "Continue", danger: true,
+        onConfirm: () => {
+          askConfirm({
+            title: "This can't be undone.",
+            body: "Reset the app now?",
+            confirmLabel: "Reset app", danger: true,
+            onConfirm: () => resetAppToDefault()
+          });
+        }
+      });
       break;
     }
     case "download-user-guide": downloadUserGuide(); break;
@@ -5102,6 +5207,16 @@ function exportBackup(){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+function downloadCredentialFile(baseName, _value, contents){
+  const blob = new Blob([contents], {type:"text/plain"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = baseName+"-"+(state.account.email||"account")+"-"+stamp+".txt";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function exportWithLicense(){
   if(!state.account || !state.auth) {
     showToast("No account credentials to export", "error");
@@ -5196,12 +5311,18 @@ async function connectCloudFolder(){
 }
 
 async function disconnectCloudFolder(){
-  if(!confirm("Stop saving backups to your connected cloud folder? Files already saved there won't be deleted.")) return;
-  await idbDelete("cloudFolderHandle").catch(()=>{});
-  state.cloudBackup = { connected:false, folderName:null, lastBackupAt:null, autoSync:false, permissionGranted:false };
-  persistCloudBackup();
-  render();
-  showToast("Disconnected from cloud folder.", "success");
+  askConfirm({
+    title: "Disconnect cloud folder?",
+    body: "Files already saved there won't be deleted.",
+    confirmLabel: "Disconnect", danger: true,
+    onConfirm: async () => {
+      await idbDelete("cloudFolderHandle").catch(()=>{});
+      state.cloudBackup = { connected:false, folderName:null, lastBackupAt:null, autoSync:false, permissionGranted:false };
+      persistCloudBackup();
+      render();
+      showToast("Disconnected from cloud folder.", "success");
+    }
+  });
 }
 
 // Deletes older automatic snapshots so the folder doesn't fill up over time.
@@ -5234,9 +5355,21 @@ async function backupToCloudFolder(silent){
     return false;
   }
   try{
-    let perm = await handle.queryPermission({ mode:"readwrite" });
-    if(perm !== "granted"){
-      if(silent) return false;
+    // Silent/background runs must never prompt, so they only ever peek at
+    // the current permission state. Explicit "Backup now" clicks go
+    // straight to requestPermission() right after the one unavoidable
+    // idbGet() above — NOT after an extra queryPermission() round-trip —
+    // because every awaited call between the click and requestPermission()
+    // risks consuming the click's transient user-activation. Once that
+    // activation is gone the browser resolves requestPermission() as if it
+    // were denied instead of showing the prompt, which is what made
+    // folders "connect" successfully but then silently fail to write on
+    // every backup after that.
+    let perm;
+    if(silent){
+      perm = await handle.queryPermission({ mode:"readwrite" });
+      if(perm !== "granted") return false;
+    } else {
       perm = await handle.requestPermission({ mode:"readwrite" });
       if(perm !== "granted"){ showToast("Permission needed to write to the cloud folder.", "error"); return false; }
     }
@@ -5390,7 +5523,7 @@ function checkAutoBackup(){
 
 function downloadUserGuide(){
   if(!window.jspdf || !window.jspdf.jsPDF){
-    alert("Couldn't load the PDF generator — check your internet connection and try again.");
+    showAlertDialog("Couldn't load the PDF generator — check your internet connection and try again.");
     return;
   }
   const { jsPDF } = window.jspdf;
@@ -5795,30 +5928,41 @@ function resetAppToDefault(){
 function importBackup(file){
   const reader = new FileReader();
   reader.onload = () => {
+    let data;
     try{
-      const data = JSON.parse(reader.result);
+      data = JSON.parse(reader.result);
       if(!data || typeof data !== "object") throw new Error("bad file");
-      const ok = confirm("Import this backup? This will replace all clients, orders, catalogue, stock, vendors, expenses and settings currently on this device.");
-      if(!ok) return;
-      if(Array.isArray(data.clients)) state.clients = data.clients;
-      if(Array.isArray(data.orders)) state.orders = data.orders;
-      if(data.catalogue && typeof data.catalogue === "object") state.catalogue = data.catalogue;
-      if(data.inventory && typeof data.inventory === "object") state.inventory = data.inventory;
-      if(Array.isArray(data.vendors)) state.vendors = data.vendors;
-      if(Array.isArray(data.expenses)) state.expenses = data.expenses;
-      if(data.business && typeof data.business === "object") state.business = Object.assign({}, state.business, data.business);
-      if(!state.business.bankAccounts) state.business.bankAccounts = [];
-      if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
-      state.darkMode = !!data.darkMode;
-      if(data.theme) applyTheme(data.theme); else applyTheme(state.theme||"indigo");
-      persistClients(); persistOrders(); persistCatalogue(); persistInventory(); persistVendors(); persistExpenses(); persistBusiness(); persist("theme", state.theme||"indigo");
-      persist("darkMode", state.darkMode); if(state.customThemeColors) persist("customThemeColors", state.customThemeColors);
-      state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
-      render();
-      alert("Backup imported successfully.");
     }catch(e){
-      alert("Couldn't read that file. Make sure it's a BizDeck backup exported from this app.");
+      showAlertDialog("Couldn't read that file. Make sure it's a BizDeck backup exported from this app.");
+      return;
     }
+    askConfirm({
+      title: "Import this backup?",
+      body: "This will replace all clients, orders, catalogue, stock, vendors, expenses and settings currently on this device.",
+      confirmLabel: "Import", danger: true,
+      onConfirm: () => {
+        try{
+          if(Array.isArray(data.clients)) state.clients = data.clients;
+          if(Array.isArray(data.orders)) state.orders = data.orders;
+          if(data.catalogue && typeof data.catalogue === "object") state.catalogue = data.catalogue;
+          if(data.inventory && typeof data.inventory === "object") state.inventory = data.inventory;
+          if(Array.isArray(data.vendors)) state.vendors = data.vendors;
+          if(Array.isArray(data.expenses)) state.expenses = data.expenses;
+          if(data.business && typeof data.business === "object") state.business = Object.assign({}, state.business, data.business);
+          if(!state.business.bankAccounts) state.business.bankAccounts = [];
+          if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
+          state.darkMode = !!data.darkMode;
+          if(data.theme) applyTheme(data.theme); else applyTheme(state.theme||"indigo");
+          persistClients(); persistOrders(); persistCatalogue(); persistInventory(); persistVendors(); persistExpenses(); persistBusiness(); persist("theme", state.theme||"indigo");
+          persist("darkMode", state.darkMode); if(state.customThemeColors) persist("customThemeColors", state.customThemeColors);
+          state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
+          render();
+          showAlertDialog("Backup imported successfully.");
+        }catch(e){
+          showAlertDialog("Couldn't read that file. Make sure it's a BizDeck backup exported from this app.");
+        }
+      }
+    });
   };
   reader.readAsText(file);
 }
@@ -6062,6 +6206,39 @@ document.addEventListener("change", (e) => {
     }).catch(()=>{
       showToast("Failed to copy access key", "error");
     });
+    return;
+  }
+  if(e.target.matches('[data-action="toggle-account-password"]')){
+    const display = e.target.getAttribute("data-display");
+    const container = document.getElementById("accountPasswordDisplay");
+    if(display === "hidden"){
+      container.innerHTML = '<code style="word-break:break-all;background:var(--gold-soft);padding:8px;border-radius:6px;display:block;font-size:11px;">'+esc(state.account.password)+'</code>';
+      e.target.setAttribute("data-display", "shown");
+      e.target.textContent = "Hide Password";
+    } else {
+      container.innerHTML = '<code style="color:var(--ink-soft);">••••••••••••••••</code>';
+      e.target.setAttribute("data-display", "hidden");
+      e.target.textContent = "Show Password";
+    }
+    return;
+  }
+  if(e.target.matches('[data-action="copy-account-password"]')){
+    const pw = state.account.password;
+    navigator.clipboard.writeText(pw).then(()=>{
+      showToast("Password copied to clipboard", "success");
+    }).catch(()=>{
+      showToast("Failed to copy password", "error");
+    });
+    return;
+  }
+  if(e.target.matches('[data-action="download-access-key-file"]')){
+    downloadCredentialFile("bizdeck-access-key", state.auth.accessKey,
+      "BizDeck access key\nAccount: "+state.account.email+"\nGenerated: "+state.auth.created+"\n\nAccess key: "+state.auth.accessKey+"\n\nKeep this file private. Anyone with this key and your exported account backup can restore your account on another device.\n");
+    return;
+  }
+  if(e.target.matches('[data-action="download-password-file"]')){
+    downloadCredentialFile("bizdeck-password", state.account.password,
+      "BizDeck password\nAccount: "+state.account.email+"\n\nPassword: "+state.account.password+"\n\nKeep this file private — store it somewhere secure (e.g. a password manager) and delete this file afterwards.\n");
     return;
   }
 });
