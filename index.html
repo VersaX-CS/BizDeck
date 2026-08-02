@@ -250,7 +250,7 @@
   #splashScreen{
     position:fixed; inset:0; z-index:99999;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:var(--bg);
+    background:#FFFFFF;
     transition:opacity .45s ease, visibility .45s ease;
   }
   #splashScreen.splash-hide{ opacity:0; visibility:hidden; pointer-events:none; }
@@ -267,11 +267,11 @@
   .splash-name .deck{ color:#0b62f0; }
   .splash-tagline{
     margin-top:6px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:600; font-size:12.5px;
-    letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft);
+    letter-spacing:.14em; text-transform:uppercase; color:#645E50;
   }
   .splash-dots{ display:flex; gap:7px; margin-top:20px; }
   .splash-dot{
-    width:8px; height:8px; border-radius:50%; background:var(--gold);
+    width:8px; height:8px; border-radius:50%; background:#0b62f0;
     animation:splashDotPulse 1.3s ease-in-out infinite;
   }
   .splash-dot:nth-child(2){ animation-delay:.15s; }
@@ -654,8 +654,18 @@ const CATEGORY_CONFIG = {
     statuses:[ {key:"Pending",pct:15},{key:"In progress",pct:55},{key:"Completed",pct:100},{key:"Cancelled",pct:100} ],
     hasMeasurements:false, itemFields:[], recordFields:[],
   },
+  services: {
+    id:"services", label:"Creative & Digital Services", icon:"camera",
+    blurb:"Photography, graphic design, web dev & other project-based work — a shareable portfolio instead of stock.",
+    accessKey:"SERVICES-2026", defaultBusinessName:"My Studio", namePlaceholder:"e.g. Lens & Pixel Studio",
+    nouns:{ client:"Client", clientPlural:"Clients", record:"Project", recordPlural:"Projects", catalogue:"Portfolio", item:"Work" },
+    statuses:[ {key:"Inquiry",pct:10},{key:"In progress",pct:45},{key:"Review",pct:75},{key:"Delivered",pct:100},{key:"Cancelled",pct:100} ],
+    hasMeasurements:false, hasInventory:false,
+    itemFields:[ {key:"turnaround",label:"Turnaround time",type:"text",placeholder:"e.g. 3-5 business days"} ],
+    recordFields:[ {key:"projectLink",label:"Project link / brief",type:"text",placeholder:"Drive link, brief doc, etc."} ],
+  },
 };
-const CATEGORY_ORDER = ["admin","tailoring","restaurant","salon","retail","real_estate","events","laundry","others"];
+const CATEGORY_ORDER = ["admin","tailoring","restaurant","salon","retail","real_estate","events","laundry","services","others"];
 function activeCategoryKey(){ return state.businessCategory || state.pendingCategory || "tailoring"; }
 function activeCatCfg(){ return CATEGORY_CONFIG[activeCategoryKey()] || CATEGORY_CONFIG.tailoring; }
 function nounFor(key){ return activeCatCfg().nouns[key]; }
@@ -682,7 +692,7 @@ const MUTATING_ACTIONS = new Set([
   "open-expense-modal-new","open-expense-modal","save-expense","delete-expense",
   "connect-cloud-folder","disconnect-cloud-folder","backup-to-cloud-now",
 ]);
-const MUTATING_CHANGE_ACTIONS = new Set(["upload-logo","upload-images","upload-gallery-images","import-data-file","toggle-auto-backup","toggle-dark-mode","upload-signature-image","toggle-signature-invoice","toggle-signature-receipt","toggle-cloud-auto-sync"]);
+const MUTATING_CHANGE_ACTIONS = new Set(["upload-logo","upload-images","upload-gallery-images","import-data-file","toggle-auto-backup","toggle-dark-mode","upload-signature-image","toggle-signature-invoice","toggle-signature-receipt","toggle-cloud-auto-sync","toggle-portfolio-prices"]);
 const SIGNATURE_FONTS = [
   { key:"Dancing Script", label:"Dancing Script" },
   { key:"Great Vibes", label:"Great Vibes" },
@@ -702,7 +712,16 @@ const addDaysISO = (n) => { const d=new Date(); d.setDate(d.getDate()+n); return
 const fmtDate = (iso) => { if(!iso) return "—"; const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}); };
 const fmtDateTime = (d) => { d = d||new Date(); return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+", "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); };
 const daysUntil = (iso) => { if(!iso) return null; const d=new Date(iso+"T00:00:00"); const t=new Date(); t.setHours(0,0,0,0); return Math.round((d-t)/86400000); };
-const money = (n,cur) => (cur||"")+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+const round2 = (n) => Math.round((Number(n||0) + Number.EPSILON) * 100) / 100;
+const money = (n,cur) => {
+  const num = round2(n);
+  // Only show decimals when there actually are cents/kobo to show — this
+  // keeps the common case (round Naira amounts) clean, while never
+  // silently rounding away a real fractional value (which used to make
+  // subtotal + tax not add up to the printed total on an invoice).
+  const opts = Number.isInteger(num) ? {maximumFractionDigits:0} : {minimumFractionDigits:2,maximumFractionDigits:2};
+  return (cur||"")+num.toLocaleString(undefined,opts);
+};
 const greeting = () => { const h=new Date().getHours(); return h<12?"Good morning":h<17?"Good afternoon":"Good evening"; };
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function getPath(obj, path){ return path.split('.').reduce((o,k)=> (o==null?undefined:o[k]), obj); }
@@ -742,18 +761,18 @@ const statusInfo = (s) => currentStatuses().find(x=>x.key===s) || currentStatuse
 const statusClass = (s) => "status-"+(s||"pending").toLowerCase().replace(/\s+/g,"-");
 
 const waLink = (phone, text) => { const digits=(phone||"").replace(/[^0-9]/g,""); return "https://wa.me/"+digits+"?text="+encodeURIComponent(text); };
-const orderSubtotal = (o) => (o.items||[]).reduce((s,i)=>s+Number(i.price||0),0);
+const orderSubtotal = (o) => round2((o.items||[]).reduce((s,i)=>s+Number(i.price||0),0));
 const orderDiscountAmount = (o) => {
   const sub = orderSubtotal(o);
   const val = Number(o.discountValue||0);
   if(!val) return 0;
-  if(o.discountType==="flat") return Math.max(0, Math.min(val, sub));
-  return sub * (Math.max(0,Math.min(100,val))/100);
+  if(o.discountType==="flat") return round2(Math.max(0, Math.min(val, sub)));
+  return round2(sub * (Math.max(0,Math.min(100,val))/100));
 };
-const orderTaxableAmount = (o) => Math.max(0, orderSubtotal(o) - orderDiscountAmount(o));
-const orderTaxAmount = (o) => orderTaxableAmount(o) * (Math.max(0,Number(o.taxPercent||0))/100);
-const orderTotal = (o) => orderTaxableAmount(o) + orderTaxAmount(o);
-const orderPaid = (o) => (o.payments||[]).reduce((s,p)=> p.status==="void" ? s : s+Number(p.amount||0),0);
+const orderTaxableAmount = (o) => round2(Math.max(0, orderSubtotal(o) - orderDiscountAmount(o)));
+const orderTaxAmount = (o) => round2(orderTaxableAmount(o) * (Math.max(0,Number(o.taxPercent||0))/100));
+const orderTotal = (o) => round2(orderTaxableAmount(o) + orderTaxAmount(o));
+const orderPaid = (o) => round2((o.payments||[]).reduce((s,p)=> p.status==="void" ? s : s+Number(p.amount||0),0));
 const recordKind = (o) => o.kind==="quote" ? "quote" : "order";
 const isRealOrder = (o) => recordKind(o)==="order";
 const isQuoteRecord = (o) => recordKind(o)==="quote";
@@ -792,8 +811,8 @@ function orderCreditNotesFor(orderId, type){
   return (state.creditNotes||[]).filter(n=>n.orderId===orderId && n.type===type);
 }
 function creditNoteActiveTotal(orderId, type){
-  return (state.creditNotes||[]).filter(n=>n.orderId===orderId && n.type===type && n.status!=="void")
-    .reduce((s,n)=>s+Number(n.amount||0),0);
+  return round2((state.creditNotes||[]).filter(n=>n.orderId===orderId && n.type===type && n.status!=="void")
+    .reduce((s,n)=>s+Number(n.amount||0),0));
 }
 // Balance after factoring in issued (non-void) credit/debit notes —
 // credit notes reduce what's owed, debit notes increase it.
@@ -801,7 +820,7 @@ function orderAdjustedBalance(o){
   const bal = orderTotal(o) - orderPaid(o);
   const credit = creditNoteActiveTotal(o.id,"credit");
   const debit = creditNoteActiveTotal(o.id,"debit");
-  return bal - credit + debit;
+  return round2(bal - credit + debit);
 }
 const QUOTE_STATUSES = [
   { key:"Draft", pct:0 }, { key:"Sent", pct:35 }, { key:"Accepted", pct:100 },
@@ -934,6 +953,7 @@ const state = {
   inventorySearch: "",
   inventoryFilter: "all", // all | low | out
   inventoryView: "items", // items | reports
+  portfolioSettings: { showPrices: true },
   vendors: [],
   expenses: [],
   booksView: "expenses", // expenses | vendors | pnl
@@ -1495,6 +1515,8 @@ async function loadAll(){
       applyTheme(themeKey);
     }
     if(bkS){ try{ state.backupSettings = Object.assign({}, state.backupSettings, JSON.parse(bkS)); }catch(e){} }
+    const pfS = localStorage.getItem("portfolioSettings");
+    if(pfS){ try{ state.portfolioSettings = Object.assign({}, state.portfolioSettings, JSON.parse(pfS)); }catch(e){} }
     const cbS = localStorage.getItem("cloudBackup");
     if(cbS){ try{ state.cloudBackup = Object.assign({}, state.cloudBackup, JSON.parse(cbS)); }catch(e){} }
     // Auth state is intentionally NOT loaded from storage: every fresh
@@ -1630,6 +1652,7 @@ const persistExpenses = persistBusinessesRegistry;
 const persistCreditNotes = () => persist("creditNotes", state.creditNotes);
 const persistBusiness = persistBusinessesRegistry;
 const persistBackupSettings = () => persist("backupSettings", state.backupSettings);
+const persistPortfolioSettings = () => persist("portfolioSettings", state.portfolioSettings);
 const persistCloudBackup = () => persist("cloudBackup", state.cloudBackup);
 const persistAccount = () => persist("account", state.account);
 const persistAuth = () => persist("auth", state.auth);
@@ -1728,7 +1751,7 @@ function render(){
     {key:"clients", label:nounFor("clientPlural"), icon:"users"},
     {key:"orders", label:nounFor("recordPlural"), icon:"bag"},
     {key:"catalogue", label:nounFor("catalogue"), icon:"image"},
-    {key:"inventory", label:"Stock", icon:"box"},
+    (activeCatCfg().hasInventory===false ? {key:"portfolio", label:"Portfolio", icon:"gallery"} : {key:"inventory", label:"Stock", icon:"box"}),
     {key:"books", label:"Books", icon:"ledger"},
     {key:"account", label:"Account", icon:"account"},
   ];
@@ -1780,6 +1803,7 @@ function renderTabContent(){
   if(state.tab === "orders") return renderOrders();
   if(state.tab === "catalogue") return renderCatalogue();
   if(state.tab === "inventory") return renderInventory();
+  if(state.tab === "portfolio") return renderPortfolio();
   if(state.tab === "books") return renderBooks();
   if(state.tab === "account") return renderAccount();
   return "";
@@ -2142,6 +2166,45 @@ async function previewReminderImage(order, client, bal){
     showToast("Couldn't generate the preview", "error");
   }
 }
+function buildPortfolioCardHtml(business){
+  const primary=themeColor("primary"), gold=themeColor("gold");
+  const ink=CARD_INK, inkSoft=CARD_INK_SOFT, line=CARD_LINE;
+  const showPrices = state.portfolioSettings ? state.portfolioSettings.showPrices!==false : true;
+  const sections = state.catalogue.categories.map(cat=>{
+    const items = state.catalogue.items.filter(i=>i.categoryId===cat.id);
+    if(items.length===0) return "";
+    return '<div style="margin-bottom:20px;">'+
+      '<div style="font-size:13px;font-weight:700;color:'+primary+';text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">'+esc(cat.name)+'</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:10px;">'+
+        items.map(i=>{
+          const img = (i.images&&i.images[0]) || null;
+          return '<div style="width:132px;">'+
+            (img ? '<img src="'+img+'" style="width:132px;height:100px;object-fit:cover;border-radius:8px;">' : '<div style="width:132px;height:100px;background:'+line+';border-radius:8px;"></div>')+
+            '<div style="font-size:12px;font-weight:600;color:'+ink+';margin-top:6px;">'+esc(i.name)+'</div>'+
+            (showPrices ? '<div style="font-size:11.5px;color:'+inkSoft+';">'+money(i.price,business.currency)+'</div>' : '')+
+          '</div>';
+        }).join("")+
+      '</div>'+
+    '</div>';
+  }).join("");
+  return '<div style="width:480px;padding:30px;background:#ffffff;font-family:Georgia,serif;box-sizing:border-box;">'+
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'+cardLogoHtml(business,52)+
+      '<div><div style="font-size:19px;font-weight:700;color:'+ink+';">'+esc(business.name||"")+'</div>'+
+      '<div style="font-size:12px;color:'+inkSoft+';">Portfolio</div></div>'+
+    '</div>'+
+    '<div style="height:3px;background:'+gold+';border-radius:2px;margin:14px 0 20px;"></div>'+
+    (sections || '<div style="font-size:12.5px;color:'+inkSoft+';">No portfolio '+esc(nounFor("item")).toLowerCase()+'s yet — add some from Account &gt; Manage '+esc(nounFor("catalogue")).toLowerCase()+'.</div>')+
+    (business.phone?'<div style="margin-top:6px;font-size:12px;color:'+inkSoft+';">Get in touch: '+esc(business.phone)+'</div>':'')+
+    cardBaseFooterHtml(inkSoft, line)+
+  '</div>';
+}
+async function sharePortfolioImage(mode){
+  const business = state.business;
+  const html = buildPortfolioCardHtml(business);
+  const file = await cardToFile(html, "portfolio-"+safeFileSlug(business.name), 480);
+  if(mode==="download"){ downloadFile(file); return; }
+  await shareImageFile(file, (business.name||"")+" — Portfolio", "");
+}
 async function sharePriceListImage(mode){
   const business = state.business;
   const html = buildPriceListCardHtml(business);
@@ -2149,6 +2212,7 @@ async function sharePriceListImage(mode){
   if(mode==="download"){ downloadFile(file); return; }
   await shareImageFile(file, (business.name||"")+" — Price List", "");
 }
+
 function statCard(label, value, iconName, tone, bg, opts){
   opts = opts || {};
   return '<div class="card" style="display:flex;flex-direction:column;gap:10px;min-width:0;'+(opts.action?'cursor:pointer;':'')+'"'+(opts.action?' data-action="'+opts.action+'"'+(opts.filter?' data-filter="'+opts.filter+'"':'')+(opts.tab?' data-tab="'+opts.tab+'"':''):'')+'>'+
@@ -2309,7 +2373,7 @@ function renderOrders(){
       '<div class="chipbar" style="margin-bottom:2px;align-items:center;">'+
         '<button class="btn '+(kindView==="order"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="order">'+icon("bag",13)+' '+esc(nounFor("recordPlural"))+'</button>'+
         '<button class="btn '+(kindView==="quote"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="quote">'+icon("edit",13)+' Quotes / estimates</button>'+
-        '<button class="iconbtn" title="How invoices, receipts &amp; payments work" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);"><strong>?</strong></button>'+
+        '<button class="btn ghost sm" title="How invoices, receipts &amp; payments work" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);">'+icon("help",13)+' Info</button>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'+
         '<div style="position:relative;flex:1;min-width:160px;max-width:320px;">'+
@@ -2594,6 +2658,39 @@ function buildCatalogueShareText(){
 }
 
 /* ================= INVENTORY / STOCK ================= */
+function renderPortfolio(){
+  const cats = state.catalogue.categories;
+  const totalItems = state.catalogue.items.length;
+  const withPhotos = state.catalogue.items.filter(i=>i.images && i.images.length>0).length;
+  const showPrices = state.portfolioSettings ? state.portfolioSettings.showPrices!==false : true;
+  return (
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Shareable portfolio</div>'+
+      '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;">Turns your '+esc(nounFor("catalogue")).toLowerCase()+' into one branded image you can send straight to a potential client — on WhatsApp, email, or anywhere else.</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+        '<button class="btn wa sm" data-action="share-portfolio-image">'+icon("send",14)+' Share portfolio</button>'+
+        '<button class="btn ghost sm" data-action="download-portfolio-image">'+icon("download",14)+' Download</button>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px solid var(--line);">'+
+        '<div><div style="font-size:13px;font-weight:500;">Show prices on portfolio</div><span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+(showPrices?"Prices are visible to viewers":"Prices are hidden — good for \"contact for quote\"")+'</span></div>'+
+        '<label class="switch"><input type="checkbox" data-action="toggle-portfolio-prices" '+(showPrices?"checked":"")+'><span class="slider"></span></label>'+
+      '</div>'+
+    '</div>'+
+    (totalItems===0 ?
+      '<div class="empty" style="display:flex;flex-direction:column;gap:10px;align-items:center;padding:28px 16px;">'+
+        '<div>Nothing to show yet — add your work to the '+esc(nounFor("catalogue")).toLowerCase()+' first.</div>'+
+        '<button class="btn gold sm" data-action="open-catalogue-manager">'+icon("plus",13)+' Manage '+esc(nounFor("catalogue")).toLowerCase()+'</button>'+
+      '</div>' :
+      '<div class="card">'+
+        '<div class="disp" style="font-weight:600;margin-bottom:10px;">What\'s included</div>'+
+        '<div class="rowline"><span>'+esc(nounFor("catalogue"))+' '+esc(nounFor("item")).toLowerCase()+'s</span><span class="mono" style="font-weight:600;">'+totalItems+'</span></div>'+
+        '<div class="rowline"><span>With photos</span><span class="mono" style="font-weight:600;">'+withPhotos+'</span></div>'+
+        '<div class="rowline"><span>Categories</span><span class="mono" style="font-weight:600;">'+cats.length+'</span></div>'+
+        (withPhotos<totalItems ? '<div style="font-size:11.5px;color:var(--gold);margin-top:8px;">Tip: add a photo to every '+esc(nounFor("item")).toLowerCase()+' so nothing looks empty on the portfolio.</div>' : '')+
+      '</div>'
+    )
+  );
+}
 function findInvItem(id){ return state.inventory.items.find(i=>i.id===id); }
 function inventoryStockValue(){
   return state.inventory.items.reduce((s,it)=> s + (Number(it.costPrice||it.sellPrice||0) * (Number(it.qtyOnHand)||0)), 0);
@@ -2751,6 +2848,8 @@ function renderInvItemModal(){
   const history = isNew ? [] : (state.inventory.movements||[]).filter(m=>m.itemId===it.id).slice(0,8);
   return modalShell(isNew ? "Add stock item" : "Edit stock item",
     '<div style="display:flex;flex-direction:column;gap:12px;">'+
+      (state.catalogue.items.length>0 ?
+        '<button type="button" class="btn ghost sm" data-action="open-catalog-picker" style="align-self:flex-start;">'+icon("image",13)+' Add from catalogue</button>' : '')+
       '<div><label>Item name</label><input type="text" data-bind="modal.draft.name" value="'+esc(it.name)+'" placeholder="e.g. Ankara maxi dress"></div>'+
       '<div style="display:flex;gap:10px;">'+
         '<div style="flex:1;"><label>SKU / code</label><input type="text" data-bind="modal.draft.sku" value="'+esc(it.sku||"")+'" placeholder="SKU-0012"></div>'+
@@ -3554,7 +3653,9 @@ function renderConsolidatedAccountSettings(){
         '<label class="switch"><input type="checkbox" data-action="toggle-auto-backup" '+(state.backupSettings.enabled?"checked":"")+'><span class="slider"></span></label>'+
       '</div>'+
       (state.backupSettings.enabled ?
-        '<div style="margin-top:10px;"><label>Backup frequency</label><select data-bind="backupSettings.frequency" data-rerender="1">[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"]].map(([v,l])=>"<option value=\""+v+"\" "+(state.backupSettings.frequency===v?"selected":"")+">"+l+"</option>").join("")</select></div>'
+        '<div style="margin-top:10px;"><label>Backup frequency</label><select data-bind="backupSettings.frequency" data-rerender="1">'+
+          [["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"]].map(([v,l])=>'<option value="'+v+'" '+(state.backupSettings.frequency===v?"selected":"")+'>'+l+'</option>').join("")+
+        '</select></div>'
       : '')+
     '</div>'+
     
@@ -3829,6 +3930,15 @@ function renderInvoiceHelpModal(){
       '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">⚠️ Overpayment (Client Paid Too Much)</strong>'+
         'If a client accidentally overpays, the app flags it. You should:'+
         '<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;"><li>Issue a <strong>credit note</strong> (formal record of the extra amount)</li><li>Refund the overpaid amount to the client</li></ul>'+
+      '</div>'+
+      '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">4. Credit Note vs Debit Note</strong>'+
+        'Once an invoice is issued it\'s locked, so you can\'t just edit the amount if something changes afterwards. Credit and debit notes are how you make that correction on paper, without touching the original invoice:'+
+        '<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;">'+
+          '<li><strong>Credit note</strong> — reduces what the client owes. Use it for a return, an overcharge, a discount agreed after the invoice was issued, or an overpayment.</li>'+
+          '<li><strong>Debit note</strong> — increases what the client owes. Use it when you need to bill extra after the invoice was issued: an additional charge, an undercharge you missed, or a correction that raises the total.</li>'+
+        '</ul>'+
+        'Is a debit note necessary? Only if the invoice needs to go up after it\'s been issued — for example the client asked for extra work, or you spot you charged too little. If you catch the mistake before issuing, just edit the invoice directly; no note needed. Once issued, use a debit note instead of a new invoice so there\'s one clean trail from the original invoice to the correction.'+
+        '<br><br>Both note types are <strong>final once issued</strong> — like receipts, they can only be voided if wrong, never edited.'+
       '</div>'+
       '<div style="background:var(--gold-soft);padding:10px;border-radius:8px;border-left:4px solid var(--gold);">'+
         '<div style="font-weight:600;color:var(--gold);margin-bottom:4px;">💡 Pro Tip: Keep Everything Tallied</div>'+
@@ -5548,6 +5658,8 @@ document.addEventListener("click", (e) => {
     }
     case "share-pricelist-image": sharePriceListImage("share"); break;
     case "download-pricelist-image": sharePriceListImage("download"); break;
+    case "share-portfolio-image": sharePortfolioImage("share"); break;
+    case "download-portfolio-image": sharePortfolioImage("download"); break;
     case "open-catitem-modal-new": if(state.modal && state.modal.type==="catalogue-manager") state.pendingModal = state.modal; openCatItemModal(null, el.getAttribute("data-cat")); break;
     case "open-catitem-modal": if(state.modal && state.modal.type==="catalogue-manager") state.pendingModal = state.modal; openCatItemModal(findCatItem(id)); break;
     case "view-catitem": openCatItemView(id); break;
@@ -5565,8 +5677,14 @@ document.addEventListener("click", (e) => {
     case "pick-catalog-item": {
       const it = findCatItem(id);
       if(it && state.pendingModal){
-        state.pendingModal.draft.items = state.pendingModal.draft.items.filter(x=>(x.desc&&x.desc.trim())||Number(x.price)>0);
-        state.pendingModal.draft.items.push({desc: it.name, price: it.price});
+        if(state.pendingModal.type==="invitem"){
+          state.pendingModal.draft.name = it.name;
+          if(Number(it.price)>0) state.pendingModal.draft.sellPrice = it.price;
+          if(!state.pendingModal.draft.notes && it.description) state.pendingModal.draft.notes = it.description;
+        } else {
+          state.pendingModal.draft.items = state.pendingModal.draft.items.filter(x=>(x.desc&&x.desc.trim())||Number(x.price)>0);
+          state.pendingModal.draft.items.push({desc: it.name, price: it.price});
+        }
       }
       closeModal();
       break;
@@ -6234,7 +6352,7 @@ function buildBackupPayload(){
 function shareBackupFile(){
   const backup = buildBackupPayload();
   const stamp = new Date().toISOString().slice(0,10);
-  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-backup-"+stamp+".json", {type:"application/json"});
+  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-backup-"+stamp+".json", {type:"text/plain"});
   if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
     exportBackup();
     showToast("Sharing isn't available here — downloaded the backup instead", "info");
@@ -6395,7 +6513,7 @@ function shareBackupWithLicense(){
     accountName: state.account.name
   });
   const stamp = new Date().toISOString().slice(0,10);
-  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
+  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"text/plain"});
   if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
     exportWithLicense();
     showToast("Sharing isn't available here — downloaded the backup instead", "info");
@@ -6423,8 +6541,8 @@ async function shareEverything(){
       accountName: state.account.name
     });
     
-    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
-    const file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"text/plain"});
+    const file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"text/plain"});
     
     // Share using native OS share sheet
     if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
@@ -7452,6 +7570,14 @@ document.addEventListener("change", (e) => {
     if(state.viewOnly){ showViewOnlyToast(); e.target.checked = state.cloudBackup.autoSync; return; }
     state.cloudBackup.autoSync = e.target.checked;
     persistCloudBackup();
+    render();
+    return;
+  }
+  if(e.target.matches('[data-action="toggle-portfolio-prices"]')){
+    if(!state.portfolioSettings) state.portfolioSettings = { showPrices:true };
+    if(state.viewOnly){ showViewOnlyToast(); e.target.checked = state.portfolioSettings.showPrices!==false; return; }
+    state.portfolioSettings.showPrices = e.target.checked;
+    persistPortfolioSettings();
     render();
     return;
   }
