@@ -3487,6 +3487,14 @@ function renderConsolidatedAccountSettings(){
       '</div>'
     : '')+
     
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;" data-tour-target="businesses">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Businesses</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+state.businesses.length+' business'+(state.businesses.length===1?'':'es')+' — each with its own '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+'</span>'+
+        '<button class="btn gold sm" style="width:100%;justify-content:center;" data-action="open-business-switcher">'+icon("swap",14)+' Switch or add a business</button>'+
+      '</div>'
+    : '')+
+    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="business-profile">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:12px;">Business profile</div>'+
       '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">'+
@@ -3523,14 +3531,6 @@ function renderConsolidatedAccountSettings(){
     '</div>'+
     
     renderBillingCard(b)+
-    
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;" data-tour-target="businesses">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Businesses</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+state.businesses.length+' business'+(state.businesses.length===1?'':'es')+' — each with its own '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+'</span>'+
-        '<button class="btn gold sm" style="width:100%;justify-content:center;" data-action="open-business-switcher">'+icon("swap",14)+' Switch or add a business</button>'+
-      '</div>'
-    : '')+
     
     '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
@@ -3647,20 +3647,6 @@ function renderConsolidatedAccountSettings(){
       '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
     '</div>'+
     
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
-        '<div class="chipbar">'+
-          CATEGORY_ORDER.map(key => {
-            const cfg = CATEGORY_CONFIG[key];
-            const active = activeCategoryKey()===key;
-            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
-          }).join("")+
-        '</div>'+
-      '</div>'
-    : '')+
-    
     '<div class="card" style="margin-bottom:16px;border-color:var(--rust);">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
@@ -3723,6 +3709,7 @@ function renderModal(){
   if(state.modal.type==="import-license") return renderImportLicenseModal();
   if(state.modal.type==="change-password") return renderChangePasswordModal();
   if(state.modal.type==="license-details") return renderLicenseDetailsModal();
+  if(state.modal.type==="invoice-help") return renderInvoiceHelpModal();
   if(state.modal.type==="policy") return renderPolicyModal();
   if(state.modal.type==="catalogue-manager") return modalShell("Manage catalogue", renderCatalogueManager(), "full");
   return "";
@@ -3800,6 +3787,41 @@ function policyBodyHtml(){
     '<p style="margin:0 0 4px;font-weight:600;color:var(--ink);">Notifications on signup and exit</p>'+
     '<p style="margin:0;">When you create a new account, you\u2019ll be asked if you\u2019d like a guided tour before we show the app. When you\u2019re about to leave the app (close the tab or browser), a reminder about backups will appear — take the moment to export one if it\u2019s been a while.</p>'+
   '</div>';
+}
+function renderInvoiceHelpModal(){
+  return modalShell("How invoices, receipts & payments work 📋",
+    '<div style="font-size:13px;line-height:1.6;color:var(--ink);">'+
+      '<div style="background:var(--surface);padding:12px;border-radius:8px;margin-bottom:12px;border-left:4px solid var(--primary);">'+
+        '<div style="font-weight:600;margin-bottom:6px;">🎯 The Process (In Plain English)</div>'+
+        '<div style="font-size:12.5px;color:var(--ink-soft);">Think of it like this: You create an invoice, send it to a client, they pay you, you record that payment and issue a receipt.</div>'+
+      '</div>'+
+      '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">1. Invoice (The Bill)</strong>'+
+        'This is your formal request for payment. It shows:'+
+        '<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;"><li>What services/items you provided and their prices</li><li>The total amount due</li><li>When payment is due</li></ul>'+
+        'Once issued, an invoice is <strong>locked</strong> — you can\'t edit the items or prices anymore (that keeps your records accurate).'+
+      '</div>'+
+      '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">2. Receipt (Proof of Payment)</strong>'+
+        'When a client pays, you generate a receipt as proof. Each receipt is numbered and shows:'+
+        '<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;"><li>How much was paid</li><li>When it was paid</li><li>How it was paid (cash, bank transfer, etc.)</li><li>What invoice it was for</li></ul>'+
+        'Receipts are also <strong>locked</strong> once created—you can only void them if there\'s a mistake (never edit).'+
+      '</div>'+
+      '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">3. Balance Tracking</strong>'+
+        'The system automatically calculates:<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;"><li><strong>Total:</strong> What you invoiced for</li><li><strong>Paid:</strong> What you\'ve received</li><li><strong>Balance:</strong> What\'s still owed (Total − Paid)</li></ul>'+
+        '• If <span style="color:var(--rust);">balance is positive (red)</span> = client still owes money<br>'+
+        '• If <span style="color:var(--green);">balance is zero (green)</span> = fully paid<br>'+
+        '• If <span style="color:var(--gold);">balance is negative (gold) ⚠️</span> = client overpaid'+
+      '</div>'+
+      '<div style="margin-bottom:14px;"><strong style="display:block;margin-bottom:6px;">⚠️ Overpayment (Client Paid Too Much)</strong>'+
+        'If a client accidentally overpays, the app flags it. You should:'+
+        '<ul style="margin:6px 0;padding-left:20px;font-size:12.5px;"><li>Issue a <strong>credit note</strong> (formal record of the extra amount)</li><li>Refund the overpaid amount to the client</li></ul>'+
+      '</div>'+
+      '<div style="background:var(--gold-soft);padding:10px;border-radius:8px;border-left:4px solid var(--gold);">'+
+        '<div style="font-weight:600;color:var(--gold);margin-bottom:4px;">💡 Pro Tip: Keep Everything Tallied</div>'+
+        '<div style="font-size:12.5px;">All receipts, credit notes, and invoices stay connected. This way, if a client disputes a payment ("Did you get my N50,000?"), you have proof in your records. That\'s what makes your business trustworthy.'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn ghost" data-action="close-modal">Got it</button></div>'
+  );
 }
 function renderPolicyModal(){
   return modalShell("Data & privacy policy", policyBodyHtml());
@@ -4032,16 +4054,25 @@ function renderOrderModal(){
 
   // Every payment is a receipt: it's numbered and locked the moment it's
   // recorded. The only way to reverse one afterwards is to void it.
-  const paymentsHtml = (o.payments||[]).map(p=>{
+  const paymentsHtml = (o.payments||[]).map((p,idx)=>{
     const isVoidP = p.status==="void";
+    const runningBalance = idx===0 ? total - (isVoidP ? 0 : Number(p.amount||0)) : 0;
+    let cumPaid = 0;
+    for(let i = 0; i <= idx; i++){ if((o.payments[i].status||"") !== "void") cumPaid += Number(o.payments[i].amount||0); }
+    const remainingBalance = total - cumPaid;
     return '<div class="rowline" style="'+(isVoidP?"opacity:.55;":"")+'">'+
       '<span>'+fmtDate(p.date)+' · '+esc(p.method)+(p.receiptNo?' · <span class="mono">'+esc(p.receiptNo)+'</span>':'')+
-        (isVoidP?' · <span class="pill status-void" style="font-size:10px;padding:2px 7px;">Void</span>':'')+'</span>'+
+        (isVoidP?' · <span class="pill status-void" style="font-size:10px;padding:2px 7px;">Void</span>':'')+
+        (idx>0&&!isVoidP?' · <span class="pill" style="background:var(--surface);color:var(--ink-soft);font-size:9.5px;padding:2px 6px;">Seq #'+(idx+1)+'</span>':'')+
+      '</span>'+
       '<span style="display:flex;gap:10px;align-items:center;">'+
-        '<span class="mono" style="'+(isVoidP?"text-decoration:line-through;":"")+'">'+money(p.amount,business.currency)+'</span>'+
+        '<div style="font-size:11px;color:var(--ink-soft);text-align:right;">'+
+          '<div class="mono" style="'+(isVoidP?"text-decoration:line-through;":"")+'font-weight:600;">'+money(p.amount,business.currency)+'</div>'+
+          (!isVoidP ? '<div style="font-size:10px;">Due: '+money(Math.max(0,remainingBalance),business.currency)+'</div>' : '')+
+        '</div>'+
         (isVoidP ? '' : '<button class="iconbtn" data-action="void-payment" data-id="'+p.id+'" title="Void this receipt" aria-label="Void this receipt">'+icon("ban",12)+'</button>')+
       '</span></div>';
-  }).join("") || '<div class="empty">No payments recorded yet.</div>';
+  }).join("") || '<div class="empty">No payments recorded yet. Add a payment when the client pays.</div>';
 
   const invoiceSection = state.modal.isExisting && client ? (
     isQuote ? (
@@ -4070,6 +4101,7 @@ function renderOrderModal(){
         '</div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
           '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" title="How invoices & receipts work?" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);"><strong>?</strong></button>'+
             '<button class="iconbtn" data-action="preview-invoice-image" data-kind="receipt" title="Preview receipt" aria-label="Preview receipt">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
@@ -4179,8 +4211,9 @@ function renderOrderModal(){
       (tax>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Tax</div><div class="mono" id="ordTaxVal" style="font-weight:600;">'+money(tax,business.currency)+'</div></div>':'')+
       '<div><div style="font-size:11.5px;color:var(--ink-soft);">Total</div><div class="mono" id="ordTotalVal" style="font-weight:600;">'+money(total,business.currency)+'</div></div>'+
       '<div><div style="font-size:11.5px;color:var(--ink-soft);">Paid</div><div class="mono" id="ordPaidVal" style="font-weight:600;color:var(--green);">'+money(paid,business.currency)+'</div></div>'+
-      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Balance</div><div class="mono" id="ordBalanceVal" style="font-weight:600;color:'+(bal>0?"var(--rust)":"var(--green)")+';">'+money(bal,business.currency)+'</div></div>'+
-    '</div>';
+      '<div><div style="font-size:11.5px;color:var(--ink-soft);">Balance</div><div class="mono" id="ordBalanceVal" style="font-weight:600;color:'+(bal>0?"var(--rust)":(bal<0?"var(--gold)":"var(--green)"))+';">'+money(bal,business.currency)+(bal<0?' ⚠️ OVERPAID':'')+' </div></div>'+
+    '</div>'+
+    (bal<0 ? '<div class="card" style="background:var(--gold-soft);border-color:var(--gold);margin-top:8px;padding:10px 12px;"><div style="display:flex;align-items:center;gap:8px;font-weight:600;color:var(--gold);">⚠️ Overpayment detected</div><div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Client has paid '+money(Math.abs(bal),business.currency)+' more than invoiced. Consider issuing a credit note or refunding the overpaid amount.</div></div>' : '');
 
   // Draft / Issued / Void banner — only meaningful for real orders that
   // already exist (a brand-new, unsaved order is implicitly a draft).
@@ -5198,6 +5231,7 @@ document.addEventListener("click", (e) => {
     case "open-order-modal": openOrderModal(findOrder(id)); break;
     case "open-notifications": state.modal = { type:"notifications" }; pushNav(); render(); break;
     case "open-catalogue-manager": state.modal = { type:"catalogue-manager" }; pushNav(); render(); break;
+    case "open-invoice-help-modal": state.modal = { type:"invoice-help" }; pushNav(); render(); break;
     case "open-policy-modal": state.modal = { type:"policy" }; pushNav(); render(); break;
     case "open-global-search": state.modal = { type:"global-search" }; state.globalSearchQ = ""; pushNav(); render();
       setTimeout(()=>{ const el = document.getElementById("globalSearchInput"); if(el) el.focus(); }, 30);
@@ -5809,17 +5843,6 @@ document.addEventListener("click", (e) => {
         
         // Show notification before tour
         setTimeout(() => notifyBeforeTour(), 600);
-      }
-      render();
-      break;
-    }
-    case "switch-module": {
-      const cat = el.getAttribute("data-cat");
-      if(state.universalAccess && CATEGORY_CONFIG[cat]){
-        state.businessCategory = cat;
-        persistBusinessCategory();
-        state.activeCategoryId = null; state.browseCategoryId = null;
-        state.tab = "dashboard";
       }
       render();
       break;
@@ -7311,6 +7334,7 @@ document.addEventListener("input", (e) => {
       else render();
     }
     if(/^modal\.draft\.items\.\d+\.price$/.test(path) || path==="modal.draft.discountValue" || path==="modal.draft.taxPercent") updateOrderTotalsInline();
+    if(path === "modal.draft.amount") render(); // Re-render when amount changes to update button state
     if(path === "modal.draft.name"){
       const btn = document.getElementById("modalSaveBtn");
       if(btn) btn.disabled = !e.target.value.trim();
