@@ -31,7 +31,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.0.3/qrcode.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Sacramento&family=Caveat:wght@500;700&family=Parisienne&display=swap');
   :root{
@@ -374,8 +373,7 @@ const ICONS = {
   cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-8.98A6 6 0 0 1 18 8.5a4 4 0 0 1-1 7.5H7z"/><path d="M12 12v6M9.5 15.5L12 18l2.5-2.5"/>',
   home:'<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"/><path d="M10 21v-6h4v6"/>',
   sliders:'<path d="M4 6h9M17 6h3M4 12h3M9 12h11M4 18h13M19 18h1"/><circle cx="14" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
-  qrcode:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14v3h2M14 19h2M19 19.5h2"/>',
-  card:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14h5M6 16.5h3"/>',
+  swap:'<path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M8 20l-3-4 3-4"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -657,7 +655,7 @@ function activeCatCfg(){ return CATEGORY_CONFIG[activeCategoryKey()] || CATEGORY
 function nounFor(key){ return activeCatCfg().nouns[key]; }
 function activeItemFields(){ return activeCatCfg().itemFields || []; }
 function activeRecordFields(){ return activeCatCfg().recordFields || []; }
-function persistBusinessCategory(){ try{ localStorage.setItem("businessCategory", state.businessCategory); }catch(e){} }
+function persistBusinessCategory(){ persistBusinessesRegistry(); }
 function persistUniversalAccess(){ try{ localStorage.setItem("universalAccess", state.universalAccess ? "1" : ""); }catch(e){} }
 // Actions that create, edit, delete, or save data — blocked while
 // signed in with the demo account (state.viewOnly === true).
@@ -869,6 +867,8 @@ const state = {
   clients: [],
   orders: [],
   catalogue: { categories: [], items: [] },
+  businesses: [], // [{id, category, business, clients, orders, catalogue, inventory, vendors, expenses}] — each business's own data silo
+  activeBusinessId: null,
   inventory: { items: [], movements: [] },
   inventorySearch: "",
   inventoryFilter: "all", // all | low | out
@@ -1364,54 +1364,20 @@ function seedDemoData(doPersist){
 
   if(doPersist){ persistBusiness(); persistClients(); persistOrders(); persistCatalogue(); persistInventory(); }
 }
-function loadRealDataFromStorage(){
-  try{
-    const c = localStorage.getItem("clients");
-    const o = localStorage.getItem("orders");
-    const cat = localStorage.getItem("catalogue");
-    const inv = localStorage.getItem("inventory");
-    const ven = localStorage.getItem("vendors");
-    const exp = localStorage.getItem("expenses");
-    const b = localStorage.getItem("business");
-    state.clients = c ? JSON.parse(c) : [];
-    state.orders = o ? JSON.parse(o) : [];
-    state.catalogue = cat ? JSON.parse(cat) : { categories:[], items:[] };
-    state.inventory = inv ? JSON.parse(inv) : { items:[], movements:[] };
-    state.vendors = ven ? JSON.parse(ven) : [];
-    state.expenses = exp ? JSON.parse(exp) : [];
-    state.business = Object.assign(
-      { name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
-      b ? JSON.parse(b) : {}
-    );
-  }catch(e){}
-}
+// (loadRealDataFromStorage now lives with the other businesses-registry
+// helpers below, since it reads from state.businesses instead of flat keys.)
 
 async function loadAll(){
   try{
-    const c = localStorage.getItem("clients");
-    const o = localStorage.getItem("orders");
-    const cat = localStorage.getItem("catalogue");
-    const inv = localStorage.getItem("inventory");
-    const ven = localStorage.getItem("vendors");
-    const exp = localStorage.getItem("expenses");
-    const b = localStorage.getItem("business");
     const th = localStorage.getItem("theme");
     const dm = localStorage.getItem("darkMode");
     const ctc = localStorage.getItem("customThemeColors");
     const acc = localStorage.getItem("account");
     const bkS = localStorage.getItem("backupSettings");
-    const bizCat = localStorage.getItem("businessCategory");
     const auth = localStorage.getItem("auth");
-    if(bizCat && CATEGORY_CONFIG[bizCat]) state.businessCategory = bizCat;
     state.universalAccess = localStorage.getItem("universalAccess") === "1";
     if(acc) state.account = JSON.parse(acc);
     if(auth) state.auth = JSON.parse(auth);
-    // Migration: any install that already has an account or saved data but no
-    // locked category predates the bundle — it was always the tailoring app.
-    if(!state.businessCategory && (acc || c || o || cat || b)){
-      state.businessCategory = "tailoring";
-      persistBusinessCategory();
-    }
     if(ctc){ try{ state.customThemeColors = JSON.parse(ctc); }catch(e){} }
     state.darkMode = dm ? JSON.parse(dm) : false;
     if(th){
@@ -1424,22 +1390,60 @@ async function loadAll(){
     if(bkS){ try{ state.backupSettings = Object.assign({}, state.backupSettings, JSON.parse(bkS)); }catch(e){} }
     const cbS = localStorage.getItem("cloudBackup");
     if(cbS){ try{ state.cloudBackup = Object.assign({}, state.cloudBackup, JSON.parse(cbS)); }catch(e){} }
-    if(!state.account && !c && !o && !cat && !b){
-      // First-ever run, no real account created yet: seed sample data
-      // in memory only (not persisted) so the view-only demo login has
-      // something to show. Persisting it here would make the next
-      // reopen look like a pre-existing install (see the migration
-      // check above) and silently lock the category to tailoring
-      // before the person ever picked a vertical.
-      seedDemoData(false);
+
+    // Businesses registry: each business keeps its own clients/orders/
+    // catalogue/inventory/vendors/expenses/profile. Try the registry first;
+    // if it's not there yet, this is either a brand-new install or an
+    // older single-business install that predates the registry — migrate
+    // whatever flat-key data exists into one business, one time only.
+    const businessesRaw = localStorage.getItem("businesses");
+    let registryLoaded = false;
+    if(businessesRaw){
+      try{
+        const parsed = JSON.parse(businessesRaw);
+        if(Array.isArray(parsed) && parsed.length){ state.businesses = parsed; registryLoaded = true; }
+      }catch(e){}
+    }
+    if(!registryLoaded){
+      const c = localStorage.getItem("clients");
+      const o = localStorage.getItem("orders");
+      const cat = localStorage.getItem("catalogue");
+      const inv = localStorage.getItem("inventory");
+      const ven = localStorage.getItem("vendors");
+      const exp = localStorage.getItem("expenses");
+      const b = localStorage.getItem("business");
+      const bizCat = localStorage.getItem("businessCategory");
+      // Migration: any install that already has an account or saved data
+      // but no locked category predates the bundle — it was always the
+      // tailoring app.
+      let category = (bizCat && CATEGORY_CONFIG[bizCat]) ? bizCat : ((acc || c || o || cat || b) ? "tailoring" : null);
+      if(category){
+        state.businesses = [{
+          id: uid(), category: category,
+          business: Object.assign({ name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null }, b ? JSON.parse(b) : {}),
+          clients: c ? JSON.parse(c) : [],
+          orders: o ? JSON.parse(o) : [],
+          catalogue: cat ? JSON.parse(cat) : { categories:[], items:[] },
+          inventory: inv ? JSON.parse(inv) : { items:[], movements:[] },
+          vendors: ven ? JSON.parse(ven) : [],
+          expenses: exp ? JSON.parse(exp) : [],
+        }];
+      }
+    }
+    const activeIdRaw = localStorage.getItem("activeBusinessId");
+    state.activeBusinessId = (activeIdRaw && state.businesses.some(x=>x.id===activeIdRaw)) ? activeIdRaw : (state.businesses[0] ? state.businesses[0].id : null);
+
+    if(state.businesses.length){
+      loadRealDataFromStorage();
+      if(!registryLoaded) persistBusinessesRegistryImmediate(); // write the freshly-migrated registry so this only runs once
     } else {
-      if(c) state.clients = JSON.parse(c);
-      if(o) state.orders = JSON.parse(o);
-      if(cat) state.catalogue = JSON.parse(cat);
-      if(inv) state.inventory = JSON.parse(inv);
-      if(ven) state.vendors = JSON.parse(ven);
-      if(exp) state.expenses = JSON.parse(exp);
-      if(b) state.business = Object.assign({}, state.business, JSON.parse(b));
+      // First-ever run, no real account created yet, nothing to migrate:
+      // seed sample data in memory only (not persisted) so the view-only
+      // demo login has something to show. Persisting it here would make
+      // the next reopen look like a pre-existing install and silently
+      // lock the category to tailoring before the person ever picked a
+      // vertical.
+      seedDemoData(false);
     }
     // Auth state is intentionally NOT loaded from storage: every fresh
     // load (refresh or reopening the app) should require signing in again.
@@ -1487,13 +1491,94 @@ function persist(key, value){
   clearTimeout(persistTimers[key]);
   persistTimers[key] = setTimeout(() => { try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){} }, 350);
 }
-const persistClients = () => persist("clients", state.clients);
-const persistOrders = () => persist("orders", state.orders);
-const persistCatalogue = () => persist("catalogue", state.catalogue);
-const persistInventory = () => persist("inventory", state.inventory);
-const persistVendors = () => persist("vendors", state.vendors);
-const persistExpenses = () => persist("expenses", state.expenses);
-const persistBusiness = () => persist("business", state.business);
+// Every business keeps its own clients/orders/catalogue/inventory/vendors/
+// expenses/profile in state.businesses[i]. The flat state.clients/orders/etc
+// fields always mirror the ACTIVE business's data (by reference where
+// possible) so the rest of the app can keep reading/writing them exactly as
+// before — these functions are the sync point that copies whatever's
+// currently in those flat fields back into the active business's slot
+// before saving. This is the only thing that changed structurally; nothing
+// else in the app needs to know businesses exist.
+function syncActiveBusinessEntry(){
+  const b = state.businesses.find(x=>x.id===state.activeBusinessId);
+  if(!b) return null;
+  b.category = state.businessCategory;
+  b.business = state.business;
+  b.clients = state.clients;
+  b.orders = state.orders;
+  b.catalogue = state.catalogue;
+  b.inventory = state.inventory;
+  b.vendors = state.vendors;
+  b.expenses = state.expenses;
+  return b;
+}
+function persistBusinessesRegistry(){
+  syncActiveBusinessEntry();
+  persist("businesses", state.businesses);
+  try{ localStorage.setItem("activeBusinessId", state.activeBusinessId||""); }catch(e){}
+}
+function persistBusinessesRegistryImmediate(){
+  syncActiveBusinessEntry();
+  clearTimeout(persistTimers["businesses"]);
+  try{ localStorage.setItem("businesses", JSON.stringify(state.businesses)); }catch(e){}
+  try{ localStorage.setItem("activeBusinessId", state.activeBusinessId||""); }catch(e){}
+}
+// Loads the active business's data into the flat state.* fields the rest of
+// the app reads. Safe to call anytime state.businesses/activeBusinessId are
+// already populated (e.g. after loading, switching, or exiting demo preview).
+function loadRealDataFromStorage(){
+  const entry = state.businesses.find(b=>b.id===state.activeBusinessId);
+  if(!entry) return;
+  state.businessCategory = entry.category;
+  state.business = entry.business;
+  state.clients = entry.clients;
+  state.orders = entry.orders;
+  state.catalogue = entry.catalogue;
+  state.inventory = entry.inventory;
+  state.vendors = entry.vendors;
+  state.expenses = entry.expenses;
+}
+function addBusinessEntry(categoryKey, name){
+  const cfg = CATEGORY_CONFIG[categoryKey] || CATEGORY_CONFIG.tailoring;
+  const entry = {
+    id: uid(), category: categoryKey || "tailoring",
+    business: { name: (name||"").trim() || cfg.defaultBusinessName, phone:"", address:"", currency: (state.business&&state.business.currency)||"₦", regNumber:"", bankAccounts:[], logo:null },
+    clients: [], orders: [], catalogue: { categories: [], items: [] },
+    inventory: { items:[], movements:[] }, vendors: [], expenses: [],
+  };
+  state.businesses.push(entry);
+  return entry;
+}
+function switchBusiness(id){
+  const target = state.businesses.find(b=>b.id===id);
+  if(!target || id===state.activeBusinessId) return;
+  syncActiveBusinessEntry();
+  state.activeBusinessId = id;
+  loadRealDataFromStorage();
+  state.activeCategoryId = null; state.browseCategoryId = null; state.selectedClientId = null;
+  state.modal = null; state.tab = "dashboard";
+  persistBusinessesRegistryImmediate();
+  collapseNav(navDepth);
+  render();
+}
+function deleteBusinessEntry(id){
+  if(state.businesses.length<=1) return;
+  const wasActive = state.activeBusinessId === id;
+  state.businesses = state.businesses.filter(b=>b.id!==id);
+  if(wasActive){
+    switchBusiness(state.businesses[0].id);
+  } else {
+    persistBusinessesRegistryImmediate();
+    render();
+  }
+}
+const persistClients = persistBusinessesRegistry;
+const persistOrders = persistBusinessesRegistry;
+const persistCatalogue = persistBusinessesRegistry;
+const persistInventory = persistBusinessesRegistry;
+const persistVendors = persistBusinessesRegistry;
+const persistExpenses = persistBusinessesRegistry;
+const persistBusiness = persistBusinessesRegistry;
 const persistBackupSettings = () => persist("backupSettings", state.backupSettings);
 const persistCloudBackup = () => persist("cloudBackup", state.cloudBackup);
 const persistAccount = () => persist("account", state.account);
@@ -1527,8 +1612,6 @@ async function tryBiometricSignIn(auto){
   if(!supportsWebAuthn()) return false;
   const rec = getBiometricRecord();
   if(!rec || !state.account || rec.email !== state.account.email) return false;
-  state.biometricWaiting = true;
-  render();
   try{
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const assertion = await navigator.credentials.get({ publicKey: {
@@ -1537,13 +1620,11 @@ async function tryBiometricSignIn(auto){
     }});
     if(assertion){
       state.authed = true; state.viewOnly = false; state.authError = null;
+      render();
       return true;
     }
   }catch(e){
-    if(!auto){ state.authError = "Fingerprint sign-in failed or was cancelled."; }
-  } finally {
-    state.biometricWaiting = false;
-    render();
+    if(!auto){ state.authError = "Fingerprint sign-in failed or was cancelled."; render(); }
   }
   return false;
 }
@@ -1603,7 +1684,9 @@ function render(){
       '<div class="topbar">'+
         '<div class="brand" data-action="open-welcome" style="cursor:pointer;">'+
           '<div class="brand-badge">'+logoHtml+'</div>'+
-          '<div class="brand-text"><div class="brand-name">'+esc(state.business.name)+'</div><div class="brand-greet">'+greeting()+'</div></div>'+
+          '<div class="brand-text"><div class="brand-name" style="display:flex;align-items:center;gap:5px;">'+esc(state.business.name)+
+            (state.universalAccess ? '<span data-action="open-business-switcher" title="Switch business" style="display:inline-flex;flex-shrink:0;color:var(--ink-soft);">'+icon("swap",12)+'</span>' : '')+
+            '</div><div class="brand-greet">'+greeting()+'</div></div>'+
         '</div>'+
         '<div class="topbar-actions">'+
           '<button class="iconbtn" data-action="start-tour" aria-label="Take a tour">'+icon("help",16)+'</button>'+
@@ -1926,20 +2009,6 @@ async function cardToFile(html, filenameBase, widthPx){
     document.body.removeChild(holder);
   }
 }
-async function cardToDataUrl(html, widthPx){
-  const holder = document.createElement("div");
-  holder.style.cssText = "position:fixed;left:-9999px;top:0;";
-  holder.style.width = (widthPx||480)+"px";
-  holder.innerHTML = html;
-  document.body.appendChild(holder);
-  try{
-    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
-    const canvas = await html2canvas(holder, {backgroundColor:"#ffffff", scale:2});
-    return canvas.toDataURL("image/png");
-  } finally {
-    document.body.removeChild(holder);
-  }
-}
 function downloadFile(file){
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
@@ -1967,18 +2036,6 @@ async function shareInvoiceImage(order, client, kind, mode){
   const caption = (kind==="receipt"?"Receipt":kind==="quote"?"Estimate":"Invoice")+" from "+(business.name||"")+(order.title?(" — "+order.title):"");
   await shareImageFile(file, caption, client?client.phone:"");
 }
-async function previewInvoiceImage(order, client, kind){
-  const business = state.business;
-  const html = buildInvoiceCardHtml(order, client, business, kind);
-  const label = kind==="receipt"?"Receipt":kind==="quote"?"Estimate":"Invoice";
-  try{
-    const dataUrl = await cardToDataUrl(html, 480);
-    openLightbox([dataUrl], 0, [label]);
-  }catch(e){
-    console.error("Preview error:", e);
-    showToast("Couldn't generate the preview", "error");
-  }
-}
 async function shareReminderImage(order, client, bal, mode){
   const business = state.business;
   const html = buildReminderCardHtml(order, client, bal, business);
@@ -1987,17 +2044,6 @@ async function shareReminderImage(order, client, bal, mode){
   if(mode==="download"){ downloadFile(file); return; }
   const caption = "Payment reminder from "+(business.name||"");
   await shareImageFile(file, caption, client?client.phone:"");
-}
-async function previewReminderImage(order, client, bal){
-  const business = state.business;
-  const html = buildReminderCardHtml(order, client, bal, business);
-  try{
-    const dataUrl = await cardToDataUrl(html, 420);
-    openLightbox([dataUrl], 0, ["Payment reminder"]);
-  }catch(e){
-    console.error("Preview error:", e);
-    showToast("Couldn't generate the preview", "error");
-  }
 }
 async function sharePriceListImage(mode){
   const business = state.business;
@@ -2430,6 +2476,57 @@ function renderCatalogueManager(){
         }).join(""))+
       '</div>'
     )
+  );
+}
+
+/* ================= BUSINESS SWITCHER ================= */
+function renderBusinessSwitcherModal(){
+  const m = state.modal;
+  const body = m.adding ? businessAddFormHtml(m) : businessListHtml();
+  return modalShell(m.adding ? "Add a business" : "Switch business", body);
+}
+function businessListHtml(){
+  return (
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'+
+      state.businesses.map(b=>{
+        const cfg = CATEGORY_CONFIG[b.category] || CATEGORY_CONFIG.tailoring;
+        const active = b.id === state.activeBusinessId;
+        return '<div class="card" style="padding:12px;display:flex;align-items:center;gap:10px;">'+
+          '<div class="icon-badge" style="background:'+(active?"var(--gold-soft)":"var(--surface)")+';color:var(--ink);border:1px solid var(--line);flex-shrink:0;">'+icon(cfg.icon,16)+'</div>'+
+          '<div style="flex:1;min-width:0;cursor:'+(active?"default":"pointer")+';" '+(active?'':'data-action="switch-business" data-id="'+b.id+'"')+'>'+
+            '<div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.business.name)+'</div>'+
+            '<div style="font-size:11px;color:var(--ink-soft);">'+esc(cfg.label.split(" / ")[0])+'</div>'+
+          '</div>'+
+          (active ?
+            '<span class="pill" style="background:var(--gold-soft);color:#8A5F1F;flex-shrink:0;">Active</span>' :
+            '<button class="iconbtn" data-action="switch-business" data-id="'+b.id+'" title="Switch to this business">'+icon("swap",14)+'</button>')+
+          (state.businesses.length>1 ? '<button class="iconbtn" data-action="delete-business" data-id="'+b.id+'" title="Delete business" style="color:var(--rust);">'+icon("trash",13)+'</button>' : '')+
+        '</div>';
+      }).join("")+
+    '</div>'+
+    '<button class="btn ghost" style="width:100%;justify-content:center;" data-action="start-add-business">'+icon("plus",14)+' Add a business</button>'
+  );
+}
+function businessAddFormHtml(m){
+  const form = m.form || (m.form = { category:"tailoring", name:"" });
+  const cfg = CATEGORY_CONFIG[form.category] || CATEGORY_CONFIG.tailoring;
+  return (
+    '<div style="margin-bottom:16px;">'+
+      '<label>Business type</label>'+
+      '<div class="chipbar" style="margin-bottom:14px;">'+
+        CATEGORY_ORDER.filter(k=>k!=="admin").map(key=>{
+          const c = CATEGORY_CONFIG[key];
+          const active = form.category===key;
+          return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="pick-new-business-category" data-cat="'+key+'">'+icon(c.icon,13)+' '+esc(c.label.split(" / ")[0])+'</button>';
+        }).join("")+
+      '</div>'+
+      '<label>Business name</label>'+
+      '<input data-bind="modal.form.name" value="'+esc(form.name)+'" placeholder="'+esc(cfg.namePlaceholder||"e.g. My Business")+'">'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;">'+
+      '<button class="btn ghost sm" data-action="cancel-add-business">Cancel</button>'+
+      '<button class="btn gold sm" style="flex:1;justify-content:center;" data-action="confirm-add-business">'+icon("check",14)+' Create business</button>'+
+    '</div>'
   );
 }
 function buildCatalogueShareText(){
@@ -2985,68 +3082,6 @@ function renderBillingCard(b){
   );
 }
 
-function businessInitials(name){
-  return (name||"T S").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
-}
-function vcardEscape(str){
-  return String(str||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
-}
-function buildBusinessVCard(b){
-  const email = (b.email || (state.account && state.account.email) || "").trim();
-  const lines = [
-    "BEGIN:VCARD",
-    "VERSION:3.0",
-    "FN:"+vcardEscape(b.name||"Business"),
-    "ORG:"+vcardEscape(b.name||"Business"),
-  ];
-  if(b.phone) lines.push("TEL;TYPE=WORK,VOICE:"+vcardEscape(b.phone));
-  if(email) lines.push("EMAIL;TYPE=WORK:"+vcardEscape(email));
-  if(b.address) lines.push("ADR;TYPE=WORK:;;"+vcardEscape(b.address)+";;;;");
-  lines.push("END:VCARD");
-  return lines.join("\r\n");
-}
-function safeFileSlug(name){
-  return (name||"business").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"") || "business";
-}
-function renderBusinessCardSection(b){
-  const initials = businessInitials(b.name);
-  const email = (b.email || (state.account && state.account.email) || "").trim();
-  const logoBlock = b.logo
-    ? '<img src="'+b.logo+'" alt="" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;">'
-    : '<div style="width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;font-family:\'Fraunces\',serif;font-weight:600;font-size:19px;flex-shrink:0;">'+esc(initials)+'</div>';
-  const qr = state.accountQrDataUrl;
-  return (
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="business-card">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business card, contact card &amp; QR code</div>'+
-      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Share your business details as a card image, a contact file '+esc(nounFor("clientPlural")).toLowerCase()+' can save, or a scannable QR code.</div>'+
-      '<div id="bizCardCanvas" style="border-radius:14px;padding:20px;background:linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);color:#fff;margin-bottom:14px;">'+
-        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">'+
-          logoBlock+
-          '<div style="min-width:0;">'+
-            '<div class="disp" style="font-weight:600;font-size:17px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.name||"Your Business")+'</div>'+
-            (b.regNumber ? '<div style="font-size:10.5px;opacity:.75;margin-top:2px;">'+esc(b.regNumber)+'</div>' : '')+
-          '</div>'+
-        '</div>'+
-        '<div style="font-size:12px;line-height:1.6;opacity:.95;">'+
-          (b.phone ? '<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">'+icon("phone",12)+'<span>'+esc(b.phone)+'</span></div>' : '')+
-          (email ? '<div style="display:flex;align-items:center;gap:7px;">'+icon("mail",12)+'<span>'+esc(email)+'</span></div>' : '')+
-        '</div>'+
-      '</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;'+(qr?'margin-bottom:14px;':'')+'">'+
-        '<button class="btn gold sm" data-action="download-business-card">'+icon("card",14)+' Download business card</button>'+
-        '<button class="btn ghost sm" data-action="download-contact-card">'+icon("download",14)+' Download contact card (.vcf)</button>'+
-        '<button class="btn ghost sm" data-action="generate-account-qr">'+icon("qrcode",14)+' '+(qr?'Regenerate QR code':'Generate QR code')+'</button>'+
-      '</div>'+
-      (qr ?
-        '<div style="border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
-          '<img src="'+qr+'" alt="Account QR code" style="width:120px;height:120px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:6px;">'+
-          '<div style="font-size:11.5px;color:var(--ink-soft);max-width:220px;flex:1;min-width:150px;">Scan to save '+esc(b.name||"this business")+'\u2019s contact details straight to a phone.</div>'+
-          '<button class="btn ghost sm" data-action="download-qr-code">'+icon("download",13)+' Download QR</button>'+
-        '</div>'
-      : '')+
-    '</div>'
-  );
-}
 function renderSignatureCard(b){
   if(!b.signature){
     b.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
@@ -3060,7 +3095,6 @@ function renderSignatureCard(b){
       '<div class="chipbar" style="margin-bottom:14px;">'+
         '<button class="btn '+(mode==="draw"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="draw">'+icon("edit",13)+' Draw / upload</button>'+
         '<button class="btn '+(mode==="typed"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="typed">Aa Type</button>'+
-        (mode==="draw" ? '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>' : '')+
       '</div>'+
       (mode==="typed" ? renderSignatureTypedArea(b) : renderSignatureDrawArea(sig))+
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">'+
@@ -3080,6 +3114,7 @@ function renderSignatureDrawArea(sig){
       '<div class="sig-preview-box" style="margin-bottom:10px;"><img src="'+sig.image+'" alt="Signature" style="max-width:100%;max-height:100px;object-fit:contain;"></div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn ghost sm" data-action="start-signature-redraw">'+icon("edit",13)+' Redraw</button>'+
+        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
         '<button class="btn ghost sm" style="color:var(--rust);" data-action="remove-signature">'+icon("trash",13)+' Remove</button>'+
       '</div>'
     );
@@ -3090,6 +3125,7 @@ function renderSignatureDrawArea(sig){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       '<button class="btn ghost sm" data-action="clear-signature-canvas">'+icon("x",13)+' Clear</button>'+
       '<button class="btn gold sm" data-action="save-signature-canvas">'+icon("check",13)+' Save signature</button>'+
+      '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
       (sig.image ? '<button class="btn ghost sm" data-action="cancel-signature-redraw">Cancel</button>' : '')+
     '</div>'
   );
@@ -3155,17 +3191,41 @@ function renderConsolidatedAccountSettings(){
   const logoHtml = b.logo ? '<img src="'+b.logo+'" alt="Business logo">' : icon("upload",20);
   
   return (
-    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
-      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
-      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
-    '</div>'+
+    // ===== ACCOUNT CREDENTIALS & LICENSE =====
+    (state.account && state.auth ? 
+      '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
+        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials & license</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key, password, and license document</span>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
+        '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-access-key-file">'+icon("download",14)+' Download</button>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
+        '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+          '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">License document</div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account and license information</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+          '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
+          '<button class="btn ghost sm" data-action="view-license-modal">'+icon("eye",14)+' View details</button>'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately and delete from Downloads. Keep your password secure.</div>'+
+      '</div>'
+    : '')+
     
     (!state.universalAccess && state.account ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(184,132,46,0.08) 0%, rgba(184,132,46,0.04) 100%);border:1.5px solid var(--gold);position:relative;overflow:hidden;">'+
         '<div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;background:var(--gold);opacity:0.08;border-radius:50%;"></div>'+
         '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:4px;color:var(--gold);">🚀 Upgrade to Premium</div>'+
         '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Currently: '+esc(activeCatCfg().label)+' only</span>'+
-        '<div style="font-size:13px;color:var(--ink);margin-bottom:12px;background:var(--surface);padding:10px;border-radius:8px;">✓ All 8 business modules<br>✓ Switch modules anytime<br>✓ Shared data across modules</div>'+
+        '<div style="font-size:13px;color:var(--ink);margin-bottom:12px;background:var(--surface);padding:10px;border-radius:8px;">✓ Run multiple businesses in one app<br>✓ Each with its own clients, records &amp; catalogue<br>✓ Switch between them anytime</div>'+
         '<button class="btn gold" style="width:100%;justify-content:center;" data-action="open-upgrade-modal">'+icon("plus",14)+' Unlock Premium Access</button>'+
       '</div>'
     : '')+
@@ -3179,16 +3239,11 @@ function renderConsolidatedAccountSettings(){
       '<div class="grid-form2">'+
         '<div><label>Business name</label><input data-bind="business.name" value="'+esc(b.name)+'"></div>'+
         '<div><label>Phone</label><input data-bind="business.phone" value="'+esc(b.phone)+'"></div>'+
-        '<div><label>Email</label><input type="email" data-bind="business.email" value="'+esc(b.email||"")+'" placeholder="'+esc((state.account&&state.account.email)||"business@example.com")+'"></div>'+
-        '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
         '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
+        '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
         '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="RC 1234567"></div>'+
       '</div>'+
     '</div>'+
-    
-    renderBusinessCardSection(b)+
-    
-    renderSignatureCard(b)+
     
     '<div class="card" style="margin-bottom:16px;" data-tour-target="bank-details">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Bank account details</div>'+
@@ -3205,7 +3260,53 @@ function renderConsolidatedAccountSettings(){
       '<button class="btn ghost sm" data-action="add-bank-account">'+icon("plus",14)+' Add another account</button>'+
     '</div>'+
     
+    renderSignatureCard(b)+
     renderBillingCard(b)+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
+      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
+    '</div>'+
+    
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;" data-tour-target="businesses">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Businesses</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+state.businesses.length+' business'+(state.businesses.length===1?'':'es')+' — each with its own '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+'</span>'+
+        '<button class="btn gold sm" style="width:100%;justify-content:center;" data-action="open-business-switcher">'+icon("swap",14)+' Switch or add a business</button>'+
+      '</div>'
+    : '')+
+    
+    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
+      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
+      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
+        Object.keys(THEMES).filter(k=>k!=="custom").map(key => {
+          const t = THEMES[key];
+          const active = (state.theme||"indigo")===key;
+          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'"><span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span><span class="swatch-label">'+t.label+'</span></button>';
+        }).join("")+
+        (state.customThemeColors ? (
+          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours"><span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span><span class="swatch-label">My colours</span><span data-action="open-custom-theme-modal" title="Edit colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span></div>'
+        ) : (
+          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add custom colour"><span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span><span class="swatch-label">Custom</span></button>'
+        ))+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="dark-mode">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
+          '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
+        '</div>'+
+        '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
+      '</div>'+
+    '</div>'+
     
     '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
@@ -3260,91 +3361,6 @@ function renderConsolidatedAccountSettings(){
       )+
     '</div>'+
     
-    // ===== ACCOUNT CREDENTIALS & LICENSE =====
-    (state.account && state.auth ? 
-      '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
-        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials & license</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key, password, and license document</span>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
-        '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show</button>'+
-          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy</button>'+
-          '<button class="btn ghost sm" data-action="download-access-key-file">'+icon("download",14)+' Download</button>'+
-        '</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
-        '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-          '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
-          '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
-          '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
-          '<button class="btn ghost sm" data-action="open-change-password-modal">'+icon("edit",14)+' Change</button>'+
-        '</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">License document</div>'+
-        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account and license information</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
-          '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
-          '<button class="btn ghost sm" data-action="view-license-modal">'+icon("eye",14)+' View details</button>'+
-        '</div>'+
-        '<div style="font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately and delete from Downloads. Keep your password secure.</div>'+
-      '</div>'
-    : '')+
-    
-    '<div class="card" style="margin-bottom:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
-      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
-    '</div>'+
-    
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
-        '<div class="chipbar">'+
-          CATEGORY_ORDER.map(key => {
-            const cfg = CATEGORY_CONFIG[key];
-            const active = activeCategoryKey()===key;
-            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
-          }).join("")+
-        '</div>'+
-      '</div>'
-    : '')+
-    
-    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
-      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
-        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
-      '</div>'+
-    '</div>'+
-    
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
-        Object.keys(THEMES).filter(k=>k!=="custom").map(key => {
-          const t = THEMES[key];
-          const active = (state.theme||"indigo")===key;
-          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'"><span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span><span class="swatch-label">'+t.label+'</span></button>';
-        }).join("")+
-        (state.customThemeColors ? (
-          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours"><span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span><span class="swatch-label">My colours</span><span data-action="open-custom-theme-modal" title="Edit colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span></div>'
-        ) : (
-          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add custom colour"><span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span><span class="swatch-label">Custom</span></button>'
-        ))+
-      '</div>'+
-    '</div>'+
-    
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="dark-mode">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
-        '<div style="display:flex;align-items:center;gap:10px;">'+
-          '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
-          '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
-        '</div>'+
-        '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
-      '</div>'+
-    '</div>'+
-    
     '<div class="card" style="margin-bottom:16px;">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Data & privacy note</div>'+
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Storage, backups, access, indemnity</span>'+
@@ -3360,18 +3376,17 @@ function renderConsolidatedAccountSettings(){
         '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
       '</div>'+
       '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'</div>'+
-      '<div style="border-top:1px solid var(--line);padding-top:12px;">'+
-        '<div style="font-weight:500;font-size:13px;margin-bottom:10px;">Support VersaX CS — bank transfer</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Bank name</div>'+
-        '<div style="font-size:13px;color:var(--ink);margin-bottom:10px;">'+esc(SUPPORT_BANK)+'</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Account name</div>'+
-        '<div style="font-size:13px;color:var(--ink);margin-bottom:10px;">'+esc(SUPPORT_ACCOUNT_NAME)+'</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Account number</div>'+
-        '<div style="font-size:13px;color:var(--ink);"><span class="mono" id="supportAcctNo">'+esc(SUPPORT_ACCOUNT_NO)+'</span></div>'+
-        '<button class="btn ghost sm" style="margin-top:10px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy account number</button>'+
+      '<div style="border-top:1px solid var(--line);padding-top:12px;"><div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div><div style="font-size:12.5px;color:var(--ink-soft);"><span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span></div><button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy</button></div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
+        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
       '</div>'+
     '</div>'
-
   );
 }
 
@@ -3394,10 +3409,10 @@ function renderModal(){
   if(state.modal.type==="contact-dev") return renderContactDevModal();
   if(state.modal.type==="upgrade-access") return renderUpgradeAccessModal();
   if(state.modal.type==="import-license") return renderImportLicenseModal();
-  if(state.modal.type==="change-password") return renderChangePasswordModal();
   if(state.modal.type==="license-details") return renderLicenseDetailsModal();
   if(state.modal.type==="policy") return renderPolicyModal();
   if(state.modal.type==="catalogue-manager") return modalShell("Manage catalogue", renderCatalogueManager(), "full");
+  if(state.modal.type==="business-switcher") return renderBusinessSwitcherModal();
   return "";
 }
 function modalShell(title, bodyHtml, variant){
@@ -3548,19 +3563,6 @@ function renderImportLicenseModal(){
   );
 }
 
-function renderChangePasswordModal(){
-  const pf = state.passwordForm || {};
-  return modalShell("Change password",
-    '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;">Choose a new password for <strong style="color:var(--ink);">'+esc((state.account&&state.account.email)||"")+'</strong>. Your access key stays the same, but your license document and account backup will need to be re-downloaded after this change.</div>'+
-    (state.passwordChangeError ? '<div style="background:var(--rust-soft);color:var(--rust);padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px;">'+esc(state.passwordChangeError)+'</div>' : '')+
-    '<div style="margin-bottom:12px;"><label>New password</label><input type="password" data-bind="passwordForm.newPassword" value="'+esc(pf.newPassword||"")+'" placeholder="At least 6 characters"></div>'+
-    '<div style="margin-bottom:14px;"><label>Confirm new password</label><input type="password" data-bind="passwordForm.confirmPassword" value="'+esc(pf.confirmPassword||"")+'" placeholder="Re-enter new password"></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-      '<button class="btn gold" style="flex:1;min-width:120px;justify-content:center;" data-action="save-new-password">'+icon("check",15)+' Save new password</button>'+
-      '<button class="btn ghost" style="flex:1;min-width:120px;justify-content:center;" data-action="close-modal">Cancel</button>'+
-    '</div>'
-  );
-}
 function renderLicenseDetailsModal(){
   if(!state.account || !state.auth) {
     return modalShell("No Account", 
@@ -3701,7 +3703,6 @@ function renderOrderModal(){
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Share estimate</span>'+
           '<span style="display:flex;gap:6px;">'+
-            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="quote" title="Preview estimate" aria-label="Preview estimate">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="quote" title="Share estimate via WhatsApp" aria-label="Share estimate">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="quote" title="Download estimate image" aria-label="Download estimate">'+icon("download",15)+'</button>'+
           '</span>'+
@@ -3714,14 +3715,12 @@ function renderOrderModal(){
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Invoice</span>'+
           '<span style="display:flex;gap:6px;">'+
-            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="invoice" title="Preview invoice" aria-label="Preview invoice">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="invoice" title="Share invoice via WhatsApp" aria-label="Share invoice">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="invoice" title="Download invoice image" aria-label="Download invoice">'+icon("download",15)+'</button>'+
           '</span>'+
         '</div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
           '<span style="display:flex;gap:6px;">'+
-            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="receipt" title="Preview receipt" aria-label="Preview receipt">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
           '</span>'+
@@ -3729,7 +3728,6 @@ function renderOrderModal(){
         (bal>0 ?
           '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Payment reminder</span>'+
             '<span style="display:flex;gap:6px;">'+
-              '<button class="iconbtn" data-action="preview-reminder-image" title="Preview payment reminder" aria-label="Preview payment reminder">'+icon("eye",15)+'</button>'+
               '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-reminder-image" title="Send payment reminder via WhatsApp" aria-label="Send payment reminder">'+icon("send",15)+'</button>'+
               '<button class="iconbtn" data-action="download-reminder-image" title="Download payment reminder image" aria-label="Download payment reminder">'+icon("download",15)+'</button>'+
             '</span>'+
@@ -4290,7 +4288,7 @@ function renderAuthView(){
     '<div style="margin-bottom:14px;"><label>Password</label><input type="password" data-bind="authForm.password" value="'+esc(f.password||"")+'" placeholder="Password"></div>'+
     '<button class="btn" style="width:100%;justify-content:center;" data-action="sign-in">'+icon("check",15)+' Sign in</button>'+
     (supportsWebAuthn() && hasBiometricForAccount() ?
-      '<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:10px;" data-action="biometric-sign-in"'+(state.biometricWaiting?' disabled':'')+'>'+icon("fingerprint",16)+' '+(state.biometricWaiting?"Waiting for fingerprint…":"Use fingerprint")+'</button>'
+      '<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:10px;" data-action="biometric-sign-in">'+icon("fingerprint",16)+' Use fingerprint</button>'
       : '')+
     (!state.account ? (
       '<div style="margin-top:16px;padding:12px;background:var(--surface);border:1px dashed var(--line);border-radius:10px;font-size:11.5px;color:var(--ink-soft);text-align:center;">'+
@@ -4893,11 +4891,6 @@ document.addEventListener("click", (e) => {
       state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
       persistCatalogue(); render();
     }}); break;
-    case "preview-invoice-image": {
-      const o = state.modal.draft; const client = findClient(o.clientId); const kind = el.getAttribute("data-kind")||"invoice";
-      previewInvoiceImage(o, client, kind);
-      break;
-    }
     case "share-invoice-image": {
       const o = state.modal.draft; const client = findClient(o.clientId); const kind = el.getAttribute("data-kind")||"invoice";
       shareInvoiceImage(o, client, kind, "share");
@@ -4913,12 +4906,6 @@ document.addEventListener("click", (e) => {
       const client = findClient(o.clientId);
       const bal = orderTotal(o) - orderPaid(o);
       shareReminderImage(o, client, bal, "share");
-      break;
-    }
-    case "preview-reminder-image": {
-      const o = state.modal.draft; const client = findClient(o.clientId);
-      const bal = orderTotal(o) - orderPaid(o);
-      previewReminderImage(o, client, bal);
       break;
     }
     case "share-reminder-image": {
@@ -5145,9 +5132,15 @@ document.addEventListener("click", (e) => {
         // Admin access with full permissions
         state.authed = true; state.authError = null; state.viewOnly = false;
         state.isAdmin = true;
-        state.businessCategory = "admin";
-        state.business = { name:"Multiple Business Access", logo:"" };
-        state.clients = []; state.orders = []; state.catalogue = { categories:[], items:[] };
+        state.universalAccess = true;
+        if(!state.businesses.length){
+          const entry = addBusinessEntry("admin", "Multiple Business Access");
+          state.activeBusinessId = entry.id;
+        } else if(!state.activeBusinessId){
+          state.activeBusinessId = state.businesses[0].id;
+        }
+        loadRealDataFromStorage();
+        persistBusinessesRegistryImmediate();
         if(supportsWebAuthn() && !hasBiometricForAccount()){
           setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
         }
@@ -5185,11 +5178,21 @@ document.addEventListener("click", (e) => {
       } else {
         // Wipe the demo data — the new account starts with a clean slate.
         const cfg = CATEGORY_CONFIG[state.pendingCategory] || CATEGORY_CONFIG.tailoring;
-        state.clients = [];
-        state.orders = [];
-        state.catalogue = { categories: [], items: [] };
-        state.business = { name: name||cfg.defaultBusinessName, phone:"", address:"", currency: state.business.currency||"₦", regNumber:"", bankAccounts:[], logo:null };
-        persistClients(); persistOrders(); persistCatalogue(); persistBusiness();
+        const category = state.pendingCategory || "tailoring";
+        const newBusiness = { name: name||cfg.defaultBusinessName, phone:"", address:"", currency: state.business.currency||"₦", regNumber:"", bankAccounts:[], logo:null };
+        const entry = {
+          id: uid(), category: category, business: newBusiness,
+          clients: [], orders: [], catalogue: { categories: [], items: [] },
+          inventory: { items:[], movements:[] }, vendors: [], expenses: [],
+        };
+        state.businesses = [entry];
+        state.activeBusinessId = entry.id;
+        state.businessCategory = category;
+        state.business = newBusiness;
+        state.clients = entry.clients; state.orders = entry.orders; state.catalogue = entry.catalogue;
+        state.inventory = entry.inventory; state.vendors = entry.vendors; state.expenses = entry.expenses;
+        persistBusinessesRegistryImmediate();
+        state.pendingCategory = null;
         state.account = { name, email, password };
         persistAccount();
         
@@ -5204,9 +5207,6 @@ document.addEventListener("click", (e) => {
         };
         persistAuth();
         
-        state.businessCategory = state.pendingCategory || "tailoring";
-        state.pendingCategory = null;
-        persistBusinessCategory();
         state.universalAccess = (key === PREMIUM_KEY || key === ADMIN_ACCESS_KEY);
         state.isAdmin = (key === ADMIN_ACCESS_KEY);
         persistUniversalAccess();
@@ -5224,15 +5224,21 @@ document.addEventListener("click", (e) => {
       render();
       break;
     }
-    case "switch-module": {
-      const cat = el.getAttribute("data-cat");
-      if(state.universalAccess && CATEGORY_CONFIG[cat]){
-        state.businessCategory = cat;
-        persistBusinessCategory();
-        state.activeCategoryId = null; state.browseCategoryId = null;
-        state.tab = "dashboard";
-      }
-      render();
+    case "open-business-switcher": state.modal = { type:"business-switcher", adding:false, form:null }; pushNav(); render(); break;
+    case "switch-business": switchBusiness(id); break;
+    case "delete-business": {
+      const target = state.businesses.find(x=>x.id===id);
+      askConfirm({ title:"Delete this business?", body:"This permanently removes its clients, "+nounFor("recordPlural").toLowerCase()+", "+nounFor("catalogue").toLowerCase()+" and everything else stored under \""+((target&&target.business&&target.business.name)||"this business")+"\". This cannot be undone.", confirmLabel:"Delete", danger:true,
+        onConfirm: () => { deleteBusinessEntry(id); render(); } });
+      break;
+    }
+    case "start-add-business": state.modal.adding = true; state.modal.form = { category:"tailoring", name:"" }; render(); break;
+    case "cancel-add-business": state.modal.adding = false; state.modal.form = null; render(); break;
+    case "pick-new-business-category": if(state.modal && state.modal.form) state.modal.form.category = el.getAttribute("data-cat"); render(); break;
+    case "confirm-add-business": {
+      const form = (state.modal && state.modal.form) || {};
+      const entry = addBusinessEntry(form.category, form.name);
+      switchBusiness(entry.id);
       break;
     }
     case "toggle-auth-mode": {
@@ -5459,54 +5465,6 @@ document.addEventListener("click", (e) => {
     case "download-license-document":
       downloadLicenseDocument();
       break;
-    case "download-business-card":
-      downloadBusinessCard();
-      break;
-    case "download-contact-card":
-      downloadContactCard();
-      break;
-    case "generate-account-qr":
-      generateAccountQr();
-      break;
-    case "download-qr-code":
-      downloadQrCode();
-      break;
-    case "open-change-password-modal":
-      state.modal = { type:"change-password" };
-      state.passwordForm = { newPassword:"", confirmPassword:"" };
-      state.passwordChangeError = null;
-      pushNav();
-      render();
-      break;
-    case "save-new-password": {
-      const pf = state.passwordForm || {};
-      const newPassword = (pf.newPassword||"").trim();
-      const confirmPassword = (pf.confirmPassword||"").trim();
-      if(newPassword.length < 6){
-        state.passwordChangeError = "Password must be at least 6 characters.";
-        render();
-        break;
-      }
-      if(newPassword !== confirmPassword){
-        state.passwordChangeError = "Passwords don't match.";
-        render();
-        break;
-      }
-      state.account.password = newPassword;
-      state.auth.keyHash = simpleHash(state.account.email.toLowerCase() + newPassword);
-      persistAccount(); persistAuth();
-      state.passwordForm = null;
-      state.passwordChangeError = null;
-      closeModal();
-      showToast("Password changed successfully", "success");
-      askConfirm({
-        title: "Keep your backups in sync",
-        body: "Your license document and account backup were generated with your old password. Download updated copies now?",
-        confirmLabel: "Download both", cancelLabel: "Later",
-        onConfirm: () => { downloadLicenseDocument(); exportEverything(); }
-      });
-      break;
-    }
     case "view-license-modal":
       state.modal = { type: "license-details" };
       render();
@@ -5579,8 +5537,12 @@ function exportOrdersCsv(){
 // Shared shape for every backup we produce (download, share sheet, cloud
 // folder, or the credentialed account export below).
 function buildBackupPayload(){
+  syncActiveBusinessEntry();
   return {
-    app: "BizDeck", version: 1, exportedAt: new Date().toISOString(),
+    app: "BizDeck", version: 2, exportedAt: new Date().toISOString(),
+    businesses: state.businesses, activeBusinessId: state.activeBusinessId,
+    // Legacy top-level fields mirror the active business, kept so older
+    // restore paths (and anyone inspecting the file) still see something sane.
     clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
     businessCategory: state.businessCategory || null, universalAccess: !!state.universalAccess,
@@ -5621,53 +5583,6 @@ function downloadCredentialFile(baseName, _value, contents){
   a.href = url; a.download = baseName+"-"+(state.account.email||"account")+"-"+stamp+".txt";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function downloadContactCard(){
-  const vcard = buildBusinessVCard(state.business);
-  const blob = new Blob([vcard], {type:"text/vcard;charset=utf-8;"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = safeFileSlug(state.business.name)+"-contact.vcf";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function downloadBusinessCard(){
-  const el = document.getElementById("bizCardCanvas");
-  if(!el || typeof html2canvas === "undefined"){ showToast("Couldn't generate the business card image", "error"); return; }
-  html2canvas(el, {backgroundColor:null, scale:3}).then(canvas => {
-    canvas.toBlob(blob => {
-      if(!blob){ showToast("Couldn't generate the business card image", "error"); return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = safeFileSlug(state.business.name)+"-card.png";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    });
-  }).catch(() => { showToast("Couldn't generate the business card image", "error"); });
-}
-
-function generateAccountQr(){
-  if(typeof qrcode === "undefined"){ showToast("QR code library not available", "error"); return; }
-  try{
-    const text = buildBusinessVCard(state.business);
-    const qr = qrcode(0, "M");
-    qr.addData(text);
-    qr.make();
-    state.accountQrDataUrl = qr.createDataURL(6, 8);
-    render();
-  }catch(e){
-    console.error("QR generation error:", e);
-    showToast("Couldn't generate the QR code", "error");
-  }
-}
-
-function downloadQrCode(){
-  if(!state.accountQrDataUrl){ showToast("Generate the QR code first", "error"); return; }
-  const a = document.createElement("a");
-  a.href = state.accountQrDataUrl; a.download = safeFileSlug(state.business.name)+"-qr.png";
-  document.body.appendChild(a); a.click(); a.remove();
 }
 
 function exportWithLicense(){
@@ -6092,24 +6007,34 @@ function completeImportWithCredentials(){
     return;
   }
   
-  // Restore which business vertical this account was set up as (Tailoring,
-  // Restaurant, etc). Older backups made before this field existed fall
-  // back to "others" so the person can still get into the app; they can
-  // switch the vertical again if it's wrong.
-  state.businessCategory = (data.businessCategory && CATEGORY_CONFIG[data.businessCategory]) ? data.businessCategory : "others";
+  // Restore business data. Newer exports carry the full multi-business
+  // registry (data.businesses) — restore that wholesale so every business
+  // comes back, not just the one that was active when exported. Older
+  // backups made before the registry existed only have the flat
+  // clients/orders/etc fields for a single business — wrap those into a
+  // one-business registry so the rest of the app still works the same way.
+  if(Array.isArray(data.businesses) && data.businesses.length){
+    state.businesses = data.businesses;
+    state.activeBusinessId = (data.activeBusinessId && state.businesses.some(b=>b.id===data.activeBusinessId)) ? data.activeBusinessId : state.businesses[0].id;
+    state.universalAccess = !!data.universalAccess;
+    loadRealDataFromStorage();
+  } else {
+    const category = (data.businessCategory && CATEGORY_CONFIG[data.businessCategory]) ? data.businessCategory : "others";
+    const entry = {
+      id: uid(), category: category,
+      business: data.business || { name: data.accountName || "My Business", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
+      clients: data.clients || [], orders: data.orders || [],
+      catalogue: data.catalogue || { categories: [], items: [] },
+      inventory: data.inventory || { items:[], movements:[] },
+      vendors: data.vendors || [], expenses: data.expenses || [],
+    };
+    state.businesses = [entry];
+    state.activeBusinessId = entry.id;
+    state.universalAccess = !!data.universalAccess;
+    loadRealDataFromStorage();
+  }
   state.pendingCategory = null;
-  state.universalAccess = !!data.universalAccess;
-  persistBusinessCategory();
   persistUniversalAccess();
-
-  // Restore account data
-  state.clients = data.clients || [];
-  state.orders = data.orders || [];
-  state.catalogue = data.catalogue || { categories: [], items: [] };
-  state.inventory = data.inventory;
-  state.vendors = data.vendors || [];
-  state.expenses = data.expenses || [];
-  state.business = data.business || { name: data.accountName || "My Business", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null };
   if(data.theme) state.theme = data.theme;
   if(typeof data.darkMode !== 'undefined') state.darkMode = data.darkMode;
   if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
@@ -6129,11 +6054,8 @@ function completeImportWithCredentials(){
   };
   
   // Persist everything
-  persistClients(); persistOrders(); persistCatalogue(); persistBusiness();
+  persistBusinessesRegistryImmediate();
   persistAccount(); persistAuth();
-  if(state.inventory) persistInventory();
-  if(state.vendors) persistVendors();
-  if(state.expenses) persistExpenses();
   
   // Set auth state
   state.authed = true;
@@ -6503,11 +6425,11 @@ function downloadUserGuide(){
     ["Add one or more bank accounts", "Shown automatically on receipts", clientPlCap+" always know where to pay", "Edit or remove accounts any time"]
   );
   if(state.universalAccess){
-    subheading("Business module switcher (premium key)");
-    paragraph("Because this account signed up with a premium key, you can switch business modules anytime from Account. Your "+clientPl+", "+recordPl+" and "+catWordLower+" stay exactly the same — only the labels, statuses and extra fields shown change to match the module you pick.");
+    subheading("Multiple businesses (premium key)");
+    paragraph("Because this account signed up with a premium key, you can run more than one business from Account \u2192 Businesses. Each business keeps its own "+clientPl+", "+recordPl+" and "+catWordLower+" — nothing is shared between them — and you can switch between them anytime, or from the switch icon next to your business name up top.");
   } else {
     subheading("Have a premium key instead?");
-    paragraph("A premium key unlocks every business type and adds a module switcher here in Account, letting you flip between them without losing data. Contact the developer to upgrade your key.");
+    paragraph("A premium key lets you run more than one business from this account — each with its own "+clientPl+", "+recordPl+" and "+catWordLower+", completely separate from the others. Contact the developer to upgrade your key.");
   }
   sectionGap();
 
@@ -6542,8 +6464,8 @@ function downloadUserGuide(){
   paragraph("Quick answers to the questions "+cfg.label.split(" / ")[0].toLowerCase()+" businesses ask most.");
   faqItem("I forgot my password — what do I do?", "Contact the developer using the details on the last page to help you regain access.");
   faqItem("Can I use the app on more than one device?", "Data is stored per device. Export a backup on one device and import it on the other to move your data across.");
-  faqItem("What is the access key for signing up?", "It's provided by whoever set up your copy of the app. A standard key unlocks one business type; a premium key unlocks every business type and lets you switch between them from Account. Contact the developer if you don't have one.");
-  faqItem("Can I change my business type after signing up?", "Only if you signed up with a premium key — use the Business module switcher in Account. With a standard key, the business type chosen at sign-up is permanent on that device.");
+  faqItem("What is the access key for signing up?", "It's provided by whoever set up your copy of the app. A standard key unlocks one business; a premium key lets you run more than one business from the same account, each fully separate. Contact the developer if you don't have one.");
+  faqItem("Can I change my business type after signing up?", "The business type chosen at sign-up is permanent for that business. With a premium key you can instead add a whole new business of a different type from Account \u2192 Businesses, and switch between them — each keeps its own data.");
   faqItem("Will creating an account delete anything important?", "It clears the sample demo data only. If you already have real data saved, that stays intact.");
   faqItem("Is my data sent to a server?", "No — everything is stored locally on your device. Back up regularly to avoid losing it.");
   faqItem("Fingerprint sign-in isn't showing up — why?", "It only appears on devices with a supported biometric sensor, and after you've enabled it once from a password sign-in.");
@@ -6601,18 +6523,32 @@ function importBackup(file){
       confirmLabel: "Import", danger: true,
       onConfirm: () => {
         try{
-          if(Array.isArray(data.clients)) state.clients = data.clients;
-          if(Array.isArray(data.orders)) state.orders = data.orders;
-          if(data.catalogue && typeof data.catalogue === "object") state.catalogue = data.catalogue;
-          if(data.inventory && typeof data.inventory === "object") state.inventory = data.inventory;
-          if(Array.isArray(data.vendors)) state.vendors = data.vendors;
-          if(Array.isArray(data.expenses)) state.expenses = data.expenses;
-          if(data.business && typeof data.business === "object") state.business = Object.assign({}, state.business, data.business);
+          if(Array.isArray(data.businesses) && data.businesses.length){
+            state.businesses = data.businesses;
+            state.activeBusinessId = (data.activeBusinessId && state.businesses.some(b=>b.id===data.activeBusinessId)) ? data.activeBusinessId : state.businesses[0].id;
+            loadRealDataFromStorage();
+          } else {
+            // Older single-business backup — wrap it into a one-business registry.
+            const category = (data.businessCategory && CATEGORY_CONFIG[data.businessCategory]) ? data.businessCategory : state.businessCategory;
+            const entry = {
+              id: uid(), category: category || "tailoring",
+              business: Object.assign({}, state.business, data.business && typeof data.business==="object" ? data.business : {}),
+              clients: Array.isArray(data.clients) ? data.clients : [],
+              orders: Array.isArray(data.orders) ? data.orders : [],
+              catalogue: (data.catalogue && typeof data.catalogue==="object") ? data.catalogue : { categories:[], items:[] },
+              inventory: (data.inventory && typeof data.inventory==="object") ? data.inventory : { items:[], movements:[] },
+              vendors: Array.isArray(data.vendors) ? data.vendors : [],
+              expenses: Array.isArray(data.expenses) ? data.expenses : [],
+            };
+            state.businesses = [entry];
+            state.activeBusinessId = entry.id;
+            loadRealDataFromStorage();
+          }
           if(!state.business.bankAccounts) state.business.bankAccounts = [];
           if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
           state.darkMode = !!data.darkMode;
           if(data.theme) applyTheme(data.theme); else applyTheme(state.theme||"indigo");
-          persistClients(); persistOrders(); persistCatalogue(); persistInventory(); persistVendors(); persistExpenses(); persistBusiness(); persist("theme", state.theme||"indigo");
+          persistBusinessesRegistryImmediate(); persist("theme", state.theme||"indigo");
           persist("darkMode", state.darkMode); if(state.customThemeColors) persist("customThemeColors", state.customThemeColors);
           state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
           render();
