@@ -380,6 +380,8 @@ const ICONS = {
   card:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14h5M6 16.5h3"/>',
   lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   ban:'<circle cx="12" cy="12" r="9"/><path d="M5.5 5.5l13 13"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0-5.4 4.6L4 16.2V20h3.8l5.3-5.3a4 4 0 0 0 4.6-5.4l-2.8 2.8-2-2 2.8-2.8z"/>',
+  hammer:'<path d="M14.5 5.5l4 4-2.1 2.1-4-4z"/><path d="M12.9 7.1L4.5 15.5a1.8 1.8 0 0 0 2.5 2.5l8.4-8.4"/><path d="M17 3l4 4-1.3 1.3-4-4z"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -647,25 +649,37 @@ const CATEGORY_CONFIG = {
     recordFields:[ {key:"bagTag",label:"Bag / tag number",type:"text",placeholder:"e.g. #A102"} ],
   },
   others: {
-    id:"others", label:"Other business", icon:"account",
-    blurb:"A general-purpose setup for any other SME.",
-    accessKey:"OTHERS-2026", defaultBusinessName:"My Business", namePlaceholder:"e.g. My Business Name",
-    nouns:{ client:"Client", clientPlural:"Clients", record:"Record", recordPlural:"Records", catalogue:"Catalogue", item:"Item" },
+    id:"others", label:"Artisan / General Trade & Business", icon:"hammer",
+    blurb:"Carpenters, plumbers, electricians, welders, painters, masons and other artisans — or any other business type not listed above.",
+    accessKey:"OTHERS-2026", defaultBusinessName:"My Business", namePlaceholder:"e.g. Musa\u2019s Carpentry Works",
+    nouns:{ client:"Client", clientPlural:"Clients", record:"Job", recordPlural:"Jobs", catalogue:"Price list", item:"Item" },
     statuses:[ {key:"Pending",pct:15},{key:"In progress",pct:55},{key:"Completed",pct:100},{key:"Cancelled",pct:100} ],
-    hasMeasurements:false, itemFields:[], recordFields:[],
+    hasMeasurements:false,
+    itemFields:[ {key:"materialsCost",label:"Materials cost (optional)",type:"number",placeholder:"e.g. 15000"} ],
+    recordFields:[ {key:"jobLocation",label:"Job / site location",type:"text",placeholder:"e.g. client's site, workshop"} ],
   },
   services: {
     id:"services", label:"Creative & Digital Services", icon:"camera",
     blurb:"Photography, graphic design, web dev & other project-based work — a shareable portfolio instead of stock.",
     accessKey:"SERVICES-2026", defaultBusinessName:"My Studio", namePlaceholder:"e.g. Lens & Pixel Studio",
-    nouns:{ client:"Client", clientPlural:"Clients", record:"Project", recordPlural:"Projects", catalogue:"Portfolio", item:"Work" },
+    nouns:{ client:"Client", clientPlural:"Clients", record:"Project", recordPlural:"Projects", catalogue:"Catalogue", item:"Work" },
     statuses:[ {key:"Inquiry",pct:10},{key:"In progress",pct:45},{key:"Review",pct:75},{key:"Delivered",pct:100},{key:"Cancelled",pct:100} ],
     hasMeasurements:false, hasInventory:false,
     itemFields:[ {key:"turnaround",label:"Turnaround time",type:"text",placeholder:"e.g. 3-5 business days"} ],
     recordFields:[ {key:"projectLink",label:"Project link / brief",type:"text",placeholder:"Drive link, brief doc, etc."} ],
   },
+  repair_services: {
+    id:"repair_services", label:"Repair & Maintenance Services", icon:"wrench",
+    blurb:"Auto, phone, appliance or electronics repair — customers, jobs, and spare-parts stock.",
+    accessKey:"REPAIRS-2026", defaultBusinessName:"My Repair Shop", namePlaceholder:"e.g. Bode\u2019s Repair Shop",
+    nouns:{ client:"Customer", clientPlural:"Customers", record:"Job", recordPlural:"Jobs", catalogue:"Service menu", item:"Repair service" },
+    statuses:[ {key:"Diagnosis",pct:12},{key:"Awaiting parts",pct:30},{key:"In repair",pct:60},{key:"Testing",pct:85},{key:"Ready for pickup",pct:95},{key:"Delivered",pct:100},{key:"Cancelled",pct:100} ],
+    hasMeasurements:false, hasInventory:true,
+    itemFields:[ {key:"laborHours",label:"Estimated labor (hours)",type:"number",placeholder:"2"},{key:"warrantyDays",label:"Warranty (days)",type:"number",placeholder:"30"} ],
+    recordFields:[ {key:"itemInRepair",label:"Item being repaired (type, make/model)",type:"text",placeholder:"e.g. Toyota Camry 2016, iPhone 13, LG fridge..."},{key:"referenceNumber",label:"Reference no. (plate, serial, IMEI)",type:"text",placeholder:"e.g. plate KJA-234-XY or IMEI"} ],
+  },
 };
-const CATEGORY_ORDER = ["admin","tailoring","restaurant","salon","retail","real_estate","events","laundry","services","others"];
+const CATEGORY_ORDER = ["admin","tailoring","restaurant","salon","retail","real_estate","events","laundry","services","repair_services","others"];
 function activeCategoryKey(){ return state.businessCategory || state.pendingCategory || "tailoring"; }
 function activeCatCfg(){ return CATEGORY_CONFIG[activeCategoryKey()] || CATEGORY_CONFIG.tailoring; }
 function nounFor(key){ return activeCatCfg().nouns[key]; }
