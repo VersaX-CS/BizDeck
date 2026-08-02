@@ -257,7 +257,13 @@
   .splash-logo{
     width:96px; height:96px; border-radius:26px; object-fit:cover;
     box-shadow:0 10px 28px rgba(0,0,0,.14);
+    background:var(--primary);
+    opacity:0;
+  }
+  .splash-logo.loaded{
+    opacity:1;
     animation:splashLogoPulse 1.7s ease-in-out infinite;
+    transition:opacity .2s ease;
   }
   .splash-name{
     margin-top:18px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,sans-serif; font-weight:700; font-size:32px;
@@ -307,7 +313,7 @@
 </head>
 <body>
 <div id="splashScreen">
-  <img src="icon-512.png" alt="BizDeck" class="splash-logo">
+  <img id="splashLogoImg" src="icon-512.png" alt="BizDeck" class="splash-logo">
   <div class="splash-name"><span class="biz">Biz</span><span class="deck">Deck</span></div>
   <div class="splash-tagline">Manage. Track. Grow.</div>
   <div class="splash-dots">
@@ -320,6 +326,19 @@
 
 <script>
 /* ================= SPLASH SCREEN ================= */
+(function(){
+  const img = document.getElementById("splashLogoImg");
+  if(!img) return;
+  function reveal(){ img.classList.add("loaded"); }
+  if(img.complete && img.naturalWidth){
+    reveal();
+  } else if(img.decode){
+    img.decode().then(reveal).catch(reveal);
+  } else {
+    img.addEventListener("load", reveal);
+    img.addEventListener("error", reveal);
+  }
+})();
 const SPLASH_MIN_MS = 7000;
 const splashStartedAt = Date.now();
 function hideSplashScreen(){
@@ -918,7 +937,7 @@ function buildInvoiceText(order, client, business, kind){
   lines.push("*"+business.name+"*");
   if(business.address) lines.push(business.address);
   if(business.phone) lines.push(business.phone);
-  if(business.regNumber) lines.push("RC: "+business.regNumber);
+  if(business.regNumber) lines.push(business.regNumber);
   lines.push("—————————————");
   lines.push(kind==="receipt" ? "RECEIPT" : "INVOICE");
   if(kind==="invoice") lines.push("Status: "+(order.docStatus==="issued"?"Issued"+(order.invoiceNo?" ("+order.invoiceNo+")":""):isVoidDoc?"VOID":"Draft — not yet issued"));
@@ -2025,7 +2044,7 @@ function buildInvoiceCardHtml(order, client, business, kind){
         (business.phone?'<div style="font-size:11.5px;color:'+inkSoft+';">'+esc(business.phone)+'</div>':'')+
         '</div>'+
       '</div>'+
-      (business.regNumber?'<div style="font-size:11px;color:'+inkSoft+';text-align:right;white-space:nowrap;flex-shrink:0;">RC: '+esc(business.regNumber)+'</div>':'')+
+      (business.regNumber?'<div style="font-size:11px;color:'+inkSoft+';text-align:right;white-space:nowrap;flex-shrink:0;">'+esc(business.regNumber)+'</div>':'')+
     '</div>'+
     '<div style="height:3px;background:'+gold+';border-radius:2px;margin-bottom:16px;"></div>'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">'+
@@ -2050,7 +2069,7 @@ function buildReminderCardHtml(order, client, bal, business){
   const ink=CARD_INK, inkSoft=CARD_INK_SOFT, line=CARD_LINE, surface=CARD_SURFACE;
   return '<div style="width:420px;padding:30px;background:#ffffff;font-family:Georgia,serif;box-sizing:border-box;text-align:center;">'+
     '<div style="position:relative;">'+
-      (business.regNumber?'<div style="position:absolute;top:0;right:0;font-size:10px;color:'+inkSoft+';">RC: '+esc(business.regNumber)+'</div>':'')+
+      (business.regNumber?'<div style="position:absolute;top:0;right:0;font-size:10px;color:'+inkSoft+';">'+esc(business.regNumber)+'</div>':'')+
       '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;">'+cardLogoHtml(business,48)+
         '<div style="font-size:16px;font-weight:700;color:'+ink+';text-align:left;">'+esc(business.name||"")+'</div></div>'+
     '</div>'+
@@ -2083,7 +2102,7 @@ function buildPriceListCardHtml(business){
       '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'+cardLogoHtml(business,48)+
         '<div style="font-size:17px;font-weight:700;color:'+ink+';">'+esc(business.name||"")+'</div>'+
       '</div>'+
-      (business.regNumber?'<div style="font-size:11px;color:'+inkSoft+';text-align:right;white-space:nowrap;flex-shrink:0;">RC: '+esc(business.regNumber)+'</div>':'')+
+      (business.regNumber?'<div style="font-size:11px;color:'+inkSoft+';text-align:right;white-space:nowrap;flex-shrink:0;">'+esc(business.regNumber)+'</div>':'')+
     '</div>'+
     '<div style="height:3px;background:'+gold+';border-radius:2px;margin-bottom:16px;"></div>'+
     '<div style="font-size:15px;font-weight:700;color:'+primary+';margin-bottom:14px;">Price List</div>'+
@@ -2384,10 +2403,10 @@ function renderOrders(){
 
   return (
     '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">'+
-      '<div class="chipbar" style="margin-bottom:2px;align-items:center;">'+
+      '<div class="chipbar scroll" style="margin-bottom:2px;align-items:center;">'+
         '<button class="btn '+(kindView==="order"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="order">'+icon("bag",13)+' '+esc(nounFor("recordPlural"))+'</button>'+
         '<button class="btn '+(kindView==="quote"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="quote">'+icon("edit",13)+' Quotes / estimates</button>'+
-        '<button class="btn ghost sm" title="How invoices, receipts &amp; payments work" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);">'+icon("help",13)+' Info</button>'+
+        '<button class="iconbtn" title="How invoices, receipts &amp; payments work" data-action="open-invoice-help-modal" style="border-style:dashed;">'+icon("help",14)+'</button>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'+
         '<div style="position:relative;flex:1;min-width:160px;max-width:320px;">'+
@@ -2533,10 +2552,10 @@ function renderCatalogue(){
               '<button class="btn '+(state.browseCategoryId===c.id?'gold':'ghost')+' sm" data-action="select-browse-category" data-id="'+c.id+'">'+esc(c.name)+'</button>'
             ).join("") +'</div>') +
       '</div>'+
-      '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="open-full-gallery" title="Browse full gallery">'+icon("gallery",15)+' Gallery</button>'+
-        '<button class="btn wa sm" data-action="share-pricelist-image">'+icon("send",14)+' Share</button>'+
-        '<button class="btn ghost sm" data-action="download-pricelist-image">'+icon("download",14)+' Download</button>'+
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">'+
+        '<button class="btn ghost sm" style="flex:1;justify-content:center;" data-action="open-full-gallery" title="Browse full gallery">'+icon("gallery",15)+' Gallery</button>'+
+        '<button class="btn wa sm" style="flex:1;justify-content:center;" data-action="share-pricelist-image">'+icon("send",14)+' Share</button>'+
+        '<button class="btn ghost sm" style="flex:1;justify-content:center;" data-action="download-pricelist-image">'+icon("download",14)+' Download</button>'+
       '</div>'+
       '<button class="btn ghost" style="width:100%;justify-content:center;margin-bottom:14px;" data-action="open-catalogue-manager" data-tour-target="manage-catalogue" title="Manage categories, items and photos">'+icon("sliders",15)+' Manage catalogue</button>'+
     '</div>'+
@@ -3357,10 +3376,10 @@ function renderBillingCard(b){
         '<div><label>Next invoice number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.invoicePrefix)+'-'+String(billing.nextInvoiceSeq).padStart(4,"0")+'</div></div>'+
         '<div><label>Receipt prefix</label><input data-bind="business.billing.receiptPrefix" value="'+esc(billing.receiptPrefix)+'" placeholder="RCT"></div>'+
         '<div><label>Next receipt number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.receiptPrefix)+'-'+String(billing.nextReceiptSeq).padStart(4,"0")+'</div></div>'+
-        '<div><label>Quote / estimate prefix</label><input data-bind="business.billing.quotePrefix" value="'+esc(billing.quotePrefix)+'" placeholder="EST"></div>'+
+        '<div><label>Quote prefix</label><input data-bind="business.billing.quotePrefix" value="'+esc(billing.quotePrefix)+'" placeholder="EST"></div>'+
         '<div><label>Next quote number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.quotePrefix)+'-'+String(billing.nextQuoteSeq).padStart(4,"0")+'</div></div>'+
         '<div><label>Default tax rate (%)</label><input class="mono" type="number" data-bind="business.billing.defaultTaxPercent" value="'+esc(billing.defaultTaxPercent)+'" placeholder="0"></div>'+
-        '<div style="grid-column:1/-1;"><label>Tax ID</label><input data-bind="business.billing.taxId" value="'+esc(billing.taxId)+'" placeholder="e.g., VAT number, TIN, or Tax ID"></div>'+
+        '<div><label>Tax ID</label><input data-bind="business.billing.taxId" value="'+esc(billing.taxId)+'" placeholder="e.g., VAT number, TIN, or Tax ID"></div>'+
       '</div>'+
     '</div>'
   );
@@ -3383,10 +3402,12 @@ function businessListHtml(){
             '<div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.business.name)+'</div>'+
             '<div style="font-size:11px;color:var(--ink-soft);">'+esc(cfg.label.split(" / ")[0])+'</div>'+
           '</div>'+
+          '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">'+
           (active ?
-            '<span class="pill" style="background:var(--gold-soft);color:#8A5F1F;flex-shrink:0;">Active</span>' :
+            '<span class="pill" style="background:var(--gold-soft);color:#8A5F1F;">Active</span>' :
             '<button class="iconbtn" data-action="switch-business" data-id="'+b.id+'" title="Switch to this business">'+icon("swap",14)+'</button>')+
           (state.businesses.length>1 ? '<button class="iconbtn" data-action="delete-business" data-id="'+b.id+'" title="Delete business" style="color:var(--rust);">'+icon("trash",13)+'</button>' : '')+
+          '</div>'+
         '</div>';
       }).join("")+
     '</div>'+
@@ -3399,19 +3420,22 @@ function businessAddFormHtml(m){
   return (
     '<div style="margin-bottom:16px;">'+
       '<label>Business type</label>'+
-      '<div class="chipbar" style="margin-bottom:14px;">'+
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">'+
         CATEGORY_ORDER.filter(k=>k!=="admin").map(key=>{
           const c = CATEGORY_CONFIG[key];
           const active = form.category===key;
-          return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="pick-new-business-category" data-cat="'+key+'">'+icon(c.icon,13)+' '+esc(c.label.split(" / ")[0])+'</button>';
+          return '<button class="btn '+(active?"gold":"ghost")+'" style="width:100%;flex-direction:column;align-items:flex-start;text-align:left;gap:3px;padding:10px 12px;" data-action="pick-new-business-category" data-cat="'+key+'">'+
+            '<span style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;">'+icon(c.icon,14)+' '+esc(c.label)+'</span>'+
+            '<span style="font-size:11px;font-weight:400;line-height:1.4;'+(active?'color:rgba(255,255,255,.85);':'color:var(--ink-soft);')+'">'+esc(c.blurb)+'</span>'+
+          '</button>';
         }).join("")+
       '</div>'+
       '<label>Business name</label>'+
       '<input data-bind="modal.form.name" value="'+esc(form.name)+'" placeholder="'+esc(cfg.namePlaceholder||"e.g. My Business")+'">'+
     '</div>'+
-    '<div style="display:flex;gap:8px;">'+
-      '<button class="btn ghost sm" data-action="cancel-add-business">Cancel</button>'+
-      '<button class="btn gold sm" style="flex:1;justify-content:center;" data-action="confirm-add-business">'+icon("check",14)+' Create business</button>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn ghost sm" style="flex:1;min-width:110px;justify-content:center;" data-action="cancel-add-business">Cancel</button>'+
+      '<button class="btn gold sm" style="flex:1;min-width:110px;justify-content:center;" data-action="confirm-add-business">'+icon("check",14)+' Create business</button>'+
     '</div>'
   );
 }
@@ -3621,7 +3645,13 @@ function renderConsolidatedAccountSettings(){
         '<div><label>Email</label><input type="email" data-bind="business.email" value="'+esc(b.email||"")+'" placeholder="'+esc((state.account&&state.account.email)||"business@example.com")+'"></div>'+
         '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
         '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
-        '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="RC 1234567"></div>'+
+        '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="e.g. RC 1234567"></div>'+
+        '<div><label>Business type</label><select data-action="switch-business-category">'+
+          CATEGORY_ORDER.filter(k=>k!=="admin").map(key=>{
+            const c = CATEGORY_CONFIG[key];
+            return '<option value="'+key+'" '+(state.businessCategory===key?'selected':'')+'>'+esc(c.label)+'</option>';
+          }).join("")+
+        '</select><div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;">Picked the wrong type at setup? Switch here anytime — all your '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+' stay exactly as they are.</div></div>'+
       '</div>'+
     '</div>'+
     
@@ -3661,6 +3691,8 @@ function renderConsolidatedAccountSettings(){
         '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Data only (JSON)</button>'+
         '<button class="btn ghost sm" data-action="export-csv-clients">'+icon("download",14)+' '+nounFor("clientPlural")+' (CSV)</button>'+
         '<button class="btn ghost sm" data-action="export-csv-orders">'+icon("download",14)+' '+nounFor("recordPlural")+' (CSV)</button>'+
+        (activeCatCfg().hasInventory!==false ? '<button class="btn ghost sm" data-action="export-csv-stock">'+icon("download",14)+' Stock (CSV)</button>' : '')+
+        '<button class="btn ghost sm" data-action="export-csv-books">'+icon("download",14)+' Books (CSV)</button>'+
       '</div>'+
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">'+
         '<div><div style="font-size:13px;font-weight:500;">Automatic backup</div><span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-top:2px;">'+autoBackupStatusText()+'</span></div>'+
@@ -5808,6 +5840,16 @@ document.addEventListener("click", (e) => {
       state.browseCategoryId = el.tagName==="SELECT" ? el.value : el.getAttribute("data-id"); 
       render(); 
       break;
+    case "switch-business-category": {
+      const newCat = el.tagName==="SELECT" ? el.value : el.getAttribute("data-cat");
+      if(newCat && newCat!==state.businessCategory && CATEGORY_CONFIG[newCat]){
+        state.businessCategory = newCat;
+        persistBusinessesRegistry();
+        showToast("Business type switched — your data is unchanged", "success");
+        render();
+      }
+      break;
+    }
     case "open-lightbox": {
       const arr = getPath(state, el.getAttribute("data-target"));
       const idx = Number(el.getAttribute("data-index")||0);
@@ -6132,6 +6174,8 @@ document.addEventListener("click", (e) => {
     case "download-user-guide": downloadUserGuide(); break;
     case "export-csv-clients": exportClientsCsv(); break;
     case "export-csv-orders": exportOrdersCsv(); break;
+    case "export-csv-stock": exportStockCsv(); break;
+    case "export-csv-books": exportExpensesCsv(); break;
     case "share-backup-file": shareBackupFile(); break;
     case "share-backup-with-license": shareBackupWithLicense(); break;
     case "connect-cloud-folder": connectCloudFolder(); break;
@@ -6349,6 +6393,22 @@ function exportOrdersCsv(){
     rows.push([client?client.name:"Unknown", o.title||"", o.status, total, paid, total-paid, o.dueDate||"", o.createdAt||""]);
   });
   downloadCsv("bizdeck-"+nounFor("recordPlural").toLowerCase()+"-"+todayISO()+".csv", rows);
+}
+function exportStockCsv(){
+  const items = (state.inventory && state.inventory.items) || [];
+  const rows = [["Name","SKU","Unit","Qty on hand","Reorder level","Cost price","Sell price","Notes"]];
+  items.forEach(it=>{
+    rows.push([it.name||"", it.sku||"", it.unit||"", it.qtyOnHand||0, it.reorderLevel||0, it.costPrice||0, it.sellPrice||0, it.notes||""]);
+  });
+  downloadCsv("bizdeck-stock-"+todayISO()+".csv", rows);
+}
+function exportExpensesCsv(){
+  const rows = [["Date","Category","Vendor","Amount","Method","Note"]];
+  state.expenses.forEach(e=>{
+    const vendor = state.vendors.find(v=>v.id===e.vendorId);
+    rows.push([e.date||"", e.category||"", vendor?vendor.name:"", e.amount||0, e.method||"", e.note||""]);
+  });
+  downloadCsv("bizdeck-books-expenses-"+todayISO()+".csv", rows);
 }
 // Shared shape for every backup we produce (download, share sheet, cloud
 // folder, or the credentialed account export below).
