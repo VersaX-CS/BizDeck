@@ -2306,9 +2306,10 @@ function renderOrders(){
 
   return (
     '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">'+
-      '<div class="chipbar" style="margin-bottom:2px;">'+
+      '<div class="chipbar" style="margin-bottom:2px;align-items:center;">'+
         '<button class="btn '+(kindView==="order"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="order">'+icon("bag",13)+' '+esc(nounFor("recordPlural"))+'</button>'+
         '<button class="btn '+(kindView==="quote"?"gold":"ghost")+' sm" data-action="set-order-kind-view" data-kind="quote">'+icon("edit",13)+' Quotes / estimates</button>'+
+        '<button class="iconbtn" title="How invoices, receipts &amp; payments work" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);"><strong>?</strong></button>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'+
         '<div style="position:relative;flex:1;min-width:160px;max-width:320px;">'+
@@ -3722,6 +3723,20 @@ function modalShell(title, bodyHtml, variant){
     bodyHtml+
   '</div></div>';
 }
+// Wraps a chunk of the order modal in its own titled card, matching the
+// natural business flow (details -> items -> money -> documents...).
+// Returns "" (renders nothing) when bodyHtml is empty, so conditional
+// sections like "Credit & debit notes" simply disappear rather than
+// leaving an empty card behind.
+function sectionCard(iconName, title, bodyHtml){
+  if(!bodyHtml) return '';
+  return '<div class="card" style="margin-bottom:14px;">'+
+    '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">'+
+      '<span style="display:inline-flex;color:var(--primary);flex-shrink:0;">'+icon(iconName,15)+'</span>'+esc(title)+
+    '</div>'+
+    bodyHtml+
+  '</div>';
+}
 
 /* ================= IN-APP CONFIRM / ALERT DIALOGS ================= */
 // Replaces native confirm()/alert() browser dialogs.
@@ -4076,8 +4091,6 @@ function renderOrderModal(){
 
   const invoiceSection = state.modal.isExisting && client ? (
     isQuote ? (
-      '<div class="divider"></div>'+
-      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Estimate</div>'+
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Share estimate</span>'+
           '<span style="display:flex;gap:6px;">'+
@@ -4089,8 +4102,6 @@ function renderOrderModal(){
       '</div>'+
       '<div style="margin-top:10px;"><button class="btn gold sm" data-action="convert-quote-to-order">'+icon("check",14)+' Convert to '+nounFor("record").toLowerCase()+'</button></div>'
     ) : (
-      '<div class="divider"></div>'+
-      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Invoice &amp; reminders</div>'+
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Invoice</span>'+
           '<span style="display:flex;gap:6px;">'+
@@ -4101,7 +4112,6 @@ function renderOrderModal(){
         '</div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
           '<span style="display:flex;gap:6px;">'+
-            '<button class="iconbtn" title="How invoices & receipts work?" data-action="open-invoice-help-modal" style="color:var(--ink-soft);background:transparent;border:1px dashed var(--line);"><strong>?</strong></button>'+
             '<button class="iconbtn" data-action="preview-invoice-image" data-kind="receipt" title="Preview receipt" aria-label="Preview receipt">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
@@ -4125,8 +4135,6 @@ function renderOrderModal(){
   // issued they're just as final — void only, never edited or deleted.
   const cdNotes = (state.modal.isExisting && !isQuote) ? (state.creditNotes||[]).filter(n=>n.orderId===o.id) : [];
   const creditDebitHtml = (state.modal.isExisting && !isQuote) ? (
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:6px;">Credit &amp; debit notes</div>'+
     (!isIssued ? '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;">Available once this invoice is issued — used to correct or adjust an issued invoice without editing it.</div>' :
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'+
         '<button class="btn ghost sm" data-action="open-creditnote-modal-new" data-order-id="'+o.id+'" data-type="credit">'+icon("plus",13)+' Issue credit note</button>'+
@@ -4160,8 +4168,7 @@ function renderOrderModal(){
   ).join("");
 
   const discountTaxHtml = locked ? '' :
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Discount &amp; tax</div>'+
+    '<div style="margin-top:14px;font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-bottom:8px;">Discount &amp; tax</div>'+
     '<div class="grid-form2">'+
       '<div><label>Discount</label><div style="display:flex;gap:6px;">'+
         '<input class="mono" type="number" style="flex:1;" data-bind="modal.draft.discountValue" value="'+esc(o.discountValue||0)+'" placeholder="0">'+
@@ -4176,8 +4183,6 @@ function renderOrderModal(){
   if(!o.recurring) o.recurring = { enabled:false, frequency:"monthly", intervalDays:30, nextDate:"" };
   const rec = o.recurring;
   const recurringHtml = isQuote ? '' : (
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Recurring billing</div>'+
     '<div class="rowline" style="padding:0 0 10px 0;border-bottom:none;"><span style="font-size:13px;">Repeat this order automatically</span>'+
       '<label class="switch"><input type="checkbox" data-action="toggle-order-recurring" '+(rec.enabled?"checked":"")+'><span class="slider"></span></label></div>'+
     (rec.enabled ? (
@@ -4198,14 +4203,14 @@ function renderOrderModal(){
   );
 
   const totalsCardHtml = isQuote ?
-    '<div class="card" style="display:flex;gap:16px;margin-bottom:10px;padding:12px;flex-wrap:wrap;">'+
+    '<div style="display:flex;gap:16px;padding:12px;flex-wrap:wrap;background:var(--surface);border-radius:10px;">'+
       '<div><div style="font-size:11.5px;color:var(--ink-soft);">Subtotal</div><div class="mono" id="ordSubVal" style="font-weight:600;">'+money(sub,business.currency)+'</div></div>'+
       (discount>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Discount</div><div class="mono" id="ordDiscVal" style="font-weight:600;color:var(--rust);">-'+money(discount,business.currency)+'</div></div>':'')+
       (tax>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Tax</div><div class="mono" id="ordTaxVal" style="font-weight:600;">'+money(tax,business.currency)+'</div></div>':'')+
       '<div><div style="font-size:11.5px;color:var(--ink-soft);">Total estimate</div><div class="mono" id="ordTotalVal" style="font-weight:600;">'+money(total,business.currency)+'</div></div>'+
     '</div>'
     :
-    '<div class="card" style="display:flex;gap:16px;margin-bottom:10px;padding:12px;flex-wrap:wrap;">'+
+    '<div style="display:flex;gap:16px;padding:12px;flex-wrap:wrap;background:var(--surface);border-radius:10px;">'+
       '<div><div style="font-size:11.5px;color:var(--ink-soft);">Subtotal</div><div class="mono" id="ordSubVal" style="font-weight:600;">'+money(sub,business.currency)+'</div></div>'+
       (discount>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Discount</div><div class="mono" id="ordDiscVal" style="font-weight:600;color:var(--rust);">-'+money(discount,business.currency)+'</div></div>':'')+
       (tax>0?'<div><div style="font-size:11.5px;color:var(--ink-soft);">Tax</div><div class="mono" id="ordTaxVal" style="font-weight:600;">'+money(tax,business.currency)+'</div></div>':'')+
@@ -4247,13 +4252,8 @@ function renderOrderModal(){
 
   const saveLabel = isQuote ? "Save" : (state.modal.isNew ? "Save as draft" : (locked ? "Save" : "Save changes"));
 
-  return modalShell(state.modal.isNew?"New "+recLabel:"Edit "+recLabel,
-    (state.modal.isNew ?
-      '<div class="chipbar" style="margin-bottom:12px;">'+
-        '<button class="btn '+(!isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="order">'+esc(nounFor("record"))+'</button>'+
-        '<button class="btn '+(isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="quote">Quote / estimate</button>'+
-      '</div>' : (isQuote ? '<div class="pill status-draft" style="margin-bottom:12px;display:inline-block;">Quote / estimate</div>' : '')
-    )+
+  // Card 1 — Details: who, what, when, and current status of the document.
+  const detailsCardBody =
     docStatusBannerHtml+
     '<div class="grid-form2">'+
       clientFieldHtml+
@@ -4266,24 +4266,23 @@ function renderOrderModal(){
     '</div>'+
     (isQuote ? '' :
       '<div style="margin-top:14px;"><div class="tape-track '+(o.status==="Cancelled"?"cancelled":"")+'"><div class="fill" style="width:'+info.pct+'%;"></div></div>'+
-      '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>')+
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Items &amp; pricing</div>'+
+      '<div class="tape-labels"><span>Pending</span><span>Cutting</span><span>Sewing</span><span>Fitting</span><span>Ready</span><span>Delivered</span></div></div>');
+
+  // Card 2 — Items & pricing: what's being sold, plus any discount/tax.
+  const itemsCardBody =
     itemsHtml+
     (locked ? '' :
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn ghost sm" data-action="add-order-item">'+icon("plus",14)+' Add item</button>'+
         '<button class="btn ghost sm" data-action="open-catalog-picker">'+icon("image",14)+' From catalogue</button>'+
       '</div>')+
-    discountTaxHtml+
-    recurringHtml+
-    '<div class="divider"></div>'+
-    imagePickerHtml("Style chosen to be sewn", o.styleImages, "modal.draft.styleImages")+
-    '<div class="divider"></div>'+
-    '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">'+(isQuote?"Estimate total":"Payments")+'</div>'+
+    discountTaxHtml;
+
+  // Card 3 — Totals & payments (or just the total, for a quote/estimate).
+  const totalsCardBody =
     totalsCardHtml+
     (isQuote ? '' : (
-      paymentsHtml+
+      '<div style="margin-top:14px;">'+paymentsHtml+'</div>'+
       (isVoidDoc ? '' :
         '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">'+
           '<input class="mono" type="number" placeholder="Amount received" data-bind="modal.payAmt" value="'+esc(state.modal.payAmt||"")+'" style="flex:1;min-width:140px;">'+
@@ -4292,23 +4291,37 @@ function renderOrderModal(){
           '</select>'+
           '<button class="btn gold sm" data-action="add-payment">'+icon("plus",14)+' Add</button>'+
         '</div>')
-    ))+
-    '<div style="margin-top:14px;"><label>Notes</label><textarea rows="2" data-bind="modal.draft.notes">'+esc(o.notes)+'</textarea></div>'+
-    invoiceSection+
-    creditDebitHtml+
-    (state.modal.isExisting && o.history && o.history.length ? (
-      '<div class="divider"></div>'+
-      '<div class="disp" style="font-weight:600;font-size:15px;margin-bottom:8px;">Activity</div>'+
-      '<div style="display:flex;flex-direction:column;gap:6px;">'+
-        o.history.slice().reverse().map(h=>
-          '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);">'+
-            '<span><span class="pill '+statusClass(h.status)+'" style="font-size:10.5px;padding:2px 8px;">'+esc(h.status)+'</span></span>'+
-            '<span>'+fmtDateTime(new Date(h.at))+'</span>'+
-          '</div>'
-        ).join("")+
-      '</div>'
-    ) : '')+
-    '<div style="display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;justify-content:flex-end;">'+
+    ));
+
+  // Card 9 — Activity log (existing records only).
+  const activityCardBody = (state.modal.isExisting && o.history && o.history.length) ?
+    '<div style="display:flex;flex-direction:column;gap:6px;">'+
+      o.history.slice().reverse().map(h=>
+        '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);">'+
+          '<span><span class="pill '+statusClass(h.status)+'" style="font-size:10.5px;padding:2px 8px;">'+esc(h.status)+'</span></span>'+
+          '<span>'+fmtDateTime(new Date(h.at))+'</span>'+
+        '</div>'
+      ).join("")+
+    '</div>'
+    : '';
+
+  return modalShell(state.modal.isNew?"New "+recLabel:"Edit "+recLabel,
+    (state.modal.isNew ?
+      '<div class="chipbar" style="margin-bottom:12px;">'+
+        '<button class="btn '+(!isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="order">'+esc(nounFor("record"))+'</button>'+
+        '<button class="btn '+(isQuote?"gold":"ghost")+' sm" data-action="switch-draft-kind" data-kind="quote">Quote / estimate</button>'+
+      '</div>' : (isQuote ? '<div class="pill status-draft" style="margin-bottom:12px;display:inline-block;">Quote / estimate</div>' : '')
+    )+
+    sectionCard("edit", isQuote?"Quote details":"Order details", detailsCardBody)+
+    sectionCard("scissors", "Items & pricing", itemsCardBody)+
+    sectionCard("cash", isQuote?"Estimate total":"Totals & payments", totalsCardBody)+
+    sectionCard("image", "Style reference", imagePickerHtml("Style chosen to be sewn", o.styleImages, "modal.draft.styleImages"))+
+    sectionCard("card", isQuote?"Estimate sharing":"Invoice & receipts", invoiceSection)+
+    sectionCard("ledger", "Credit & debit notes", creditDebitHtml)+
+    sectionCard("refresh", "Recurring billing", recurringHtml)+
+    sectionCard("edit", "Notes", '<textarea rows="2" placeholder="Optional" data-bind="modal.draft.notes">'+esc(o.notes)+'</textarea>')+
+    sectionCard("calendar", "Activity", activityCardBody)+
+    '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;justify-content:flex-end;">'+
       (state.modal.isExisting && (isQuote || !locked) ? '<button class="btn rust sm" data-action="delete-order">'+icon("trash",14)+' Delete</button>' : '')+
       (state.modal.isExisting && isIssued ? '<button class="btn rust sm" data-action="void-order">'+icon("ban",14)+' Void invoice</button>' : '')+
       (state.modal.isExisting ? '<button class="iconbtn" data-action="duplicate-order" title="Duplicate as new '+recLabel+'" aria-label="Duplicate as new '+recLabel+'">'+icon("plus",15)+'</button>' : '')+
@@ -4335,7 +4348,7 @@ function renderCreditNoteModal(){
       '<div style="font-size:11.5px;color:var(--ink-soft);">Once issued, this '+(isDebit?"debit":"credit")+' note is final and can only be voided, not edited or deleted — standard bookkeeping practice.</div>'+
       '<div style="display:flex;gap:10px;margin-top:6px;">'+
         '<button class="btn ghost sm" data-action="close-modal">Cancel</button>'+
-        '<button class="btn gold" style="flex:1;" '+(!(Number(n.amount)>0)?"disabled":"")+' data-action="save-creditnote">'+icon("check",15)+' Issue '+(isDebit?"debit":"credit")+' note</button>'+
+        '<button class="btn gold" id="modalSaveBtn" style="flex:1;" '+(!(Number(n.amount)>0)?"disabled":"")+' data-action="save-creditnote">'+icon("check",15)+' Issue '+(isDebit?"debit":"credit")+' note</button>'+
       '</div>'+
     '</div>'
   );
@@ -7334,7 +7347,12 @@ document.addEventListener("input", (e) => {
       else render();
     }
     if(/^modal\.draft\.items\.\d+\.price$/.test(path) || path==="modal.draft.discountValue" || path==="modal.draft.taxPercent") updateOrderTotalsInline();
-    if(path === "modal.draft.amount") render(); // Re-render when amount changes to update button state
+    if(path === "modal.draft.amount"){
+      // Update save button state in place instead of a full re-render,
+      // which was dropping the on-screen keyboard on every keystroke.
+      const btn = document.getElementById("modalSaveBtn");
+      if(btn) btn.disabled = !(Number(e.target.value) > 0);
+    }
     if(path === "modal.draft.name"){
       const btn = document.getElementById("modalSaveBtn");
       if(btn) btn.disabled = !e.target.value.trim();
