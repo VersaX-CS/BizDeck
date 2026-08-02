@@ -31,7 +31,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.0.3/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/2.0.4/qrcode.min.js';document.head.appendChild(s);"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Sacramento&family=Caveat:wght@500;700&family=Parisienne&display=swap');
   :root{
@@ -928,6 +928,8 @@ const state = {
   creditNotes: [], // credit & debit notes issued against invoices — {id, type:"credit"|"debit", orderId, docNo, amount, reason, date, status:"issued"|"void", createdAt, voidedAt, voidReason}
   booksDocFilter: "all", // all | invoice | receipt | credit | debit
   catalogue: { categories: [], items: [] },
+  businesses: [], // [{id, category, business, clients, orders, catalogue, inventory, vendors, expenses}] — each business's own data silo
+  activeBusinessId: null,
   inventory: { items: [], movements: [] },
   inventorySearch: "",
   inventoryFilter: "all", // all | low | out
@@ -1423,57 +1425,66 @@ function seedDemoData(doPersist){
 
   if(doPersist){ persistBusiness(); persistClients(); persistOrders(); persistCatalogue(); persistInventory(); }
 }
-function loadRealDataFromStorage(){
-  try{
-    const c = localStorage.getItem("clients");
-    const o = localStorage.getItem("orders");
-    const cat = localStorage.getItem("catalogue");
-    const inv = localStorage.getItem("inventory");
-    const ven = localStorage.getItem("vendors");
-    const exp = localStorage.getItem("expenses");
-    const crn = localStorage.getItem("creditNotes");
-    const b = localStorage.getItem("business");
-    state.clients = c ? JSON.parse(c) : [];
-    state.orders = o ? JSON.parse(o) : [];
-    state.catalogue = cat ? JSON.parse(cat) : { categories:[], items:[] };
-    state.inventory = inv ? JSON.parse(inv) : { items:[], movements:[] };
-    state.vendors = ven ? JSON.parse(ven) : [];
-    state.expenses = exp ? JSON.parse(exp) : [];
-    state.creditNotes = crn ? JSON.parse(crn) : [];
-    state.business = Object.assign(
-      { name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
-      b ? JSON.parse(b) : {}
-    );
-  }catch(e){}
-}
 
 async function loadAll(){
   try{
-    const c = localStorage.getItem("clients");
-    const o = localStorage.getItem("orders");
-    const cat = localStorage.getItem("catalogue");
-    const inv = localStorage.getItem("inventory");
-    const ven = localStorage.getItem("vendors");
-    const exp = localStorage.getItem("expenses");
-    const crn = localStorage.getItem("creditNotes");
-    const b = localStorage.getItem("business");
     const th = localStorage.getItem("theme");
     const dm = localStorage.getItem("darkMode");
     const ctc = localStorage.getItem("customThemeColors");
     const acc = localStorage.getItem("account");
     const bkS = localStorage.getItem("backupSettings");
-    const bizCat = localStorage.getItem("businessCategory");
     const auth = localStorage.getItem("auth");
-    if(bizCat && CATEGORY_CONFIG[bizCat]) state.businessCategory = bizCat;
+    
+    // Load businesses registry (new multi-business model)
+    const businessesRaw = localStorage.getItem("businesses");
+    let registryLoaded = false;
+    if(businessesRaw){
+      try{
+        const parsed = JSON.parse(businessesRaw);
+        if(Array.isArray(parsed) && parsed.length){ state.businesses = parsed; registryLoaded = true; }
+      }catch(e){}
+    }
+    if(!registryLoaded){
+      // Migration: load legacy flat data into a business entry
+      const c = localStorage.getItem("clients");
+      const o = localStorage.getItem("orders");
+      const cat = localStorage.getItem("catalogue");
+      const inv = localStorage.getItem("inventory");
+      const ven = localStorage.getItem("vendors");
+      const exp = localStorage.getItem("expenses");
+      const b = localStorage.getItem("business");
+      const bizCat = localStorage.getItem("businessCategory");
+      // Migration: any install that already has an account or saved data
+      // but no locked category predates the bundle — it was always the
+      // tailoring app.
+      let category = (bizCat && CATEGORY_CONFIG[bizCat]) ? bizCat : ((acc || c || o || cat || b) ? "tailoring" : null);
+      if(category){
+        state.businesses = [{
+          id: uid(), category: category,
+          business: Object.assign({ name:"My Tailor Shop", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null }, b ? JSON.parse(b) : {}),
+          clients: c ? JSON.parse(c) : [],
+          orders: o ? JSON.parse(o) : [],
+          catalogue: cat ? JSON.parse(cat) : { categories:[], items:[] },
+          inventory: inv ? JSON.parse(inv) : { items:[], movements:[] },
+          vendors: ven ? JSON.parse(ven) : [],
+          expenses: exp ? JSON.parse(exp) : [],
+        }];
+      }
+    }
+    const activeIdRaw = localStorage.getItem("activeBusinessId");
+    state.activeBusinessId = (activeIdRaw && state.businesses.some(x=>x.id===activeIdRaw)) ? activeIdRaw : (state.businesses[0] ? state.businesses[0].id : null);
+
+    if(state.businesses.length){
+      loadRealDataFromStorage();
+      if(!registryLoaded) persistBusinessesRegistryImmediate(); // write the freshly-migrated registry so this only runs once
+    } else if(!acc){
+      // First-ever run, no real account created yet: seed sample data
+      seedDemoData(false);
+    }
+    
     state.universalAccess = localStorage.getItem("universalAccess") === "1";
     if(acc) state.account = JSON.parse(acc);
     if(auth) state.auth = JSON.parse(auth);
-    // Migration: any install that already has an account or saved data but no
-    // locked category predates the bundle — it was always the tailoring app.
-    if(!state.businessCategory && (acc || c || o || cat || b)){
-      state.businessCategory = "tailoring";
-      persistBusinessCategory();
-    }
     if(ctc){ try{ state.customThemeColors = JSON.parse(ctc); }catch(e){} }
     state.darkMode = dm ? JSON.parse(dm) : false;
     if(th){
@@ -1486,24 +1497,6 @@ async function loadAll(){
     if(bkS){ try{ state.backupSettings = Object.assign({}, state.backupSettings, JSON.parse(bkS)); }catch(e){} }
     const cbS = localStorage.getItem("cloudBackup");
     if(cbS){ try{ state.cloudBackup = Object.assign({}, state.cloudBackup, JSON.parse(cbS)); }catch(e){} }
-    if(!state.account && !c && !o && !cat && !b){
-      // First-ever run, no real account created yet: seed sample data
-      // in memory only (not persisted) so the view-only demo login has
-      // something to show. Persisting it here would make the next
-      // reopen look like a pre-existing install (see the migration
-      // check above) and silently lock the category to tailoring
-      // before the person ever picked a vertical.
-      seedDemoData(false);
-    } else {
-      if(c) state.clients = JSON.parse(c);
-      if(o) state.orders = JSON.parse(o);
-      if(cat) state.catalogue = JSON.parse(cat);
-      if(inv) state.inventory = JSON.parse(inv);
-      if(ven) state.vendors = JSON.parse(ven);
-      if(exp) state.expenses = JSON.parse(exp);
-      if(crn) state.creditNotes = JSON.parse(crn);
-      if(b) state.business = Object.assign({}, state.business, JSON.parse(b));
-    }
     // Auth state is intentionally NOT loaded from storage: every fresh
     // load (refresh or reopening the app) should require signing in again.
     state.authed = false;
@@ -1547,19 +1540,95 @@ async function loadAll(){
     }).catch(() => {});
   }
 }
+
+// ================= BUSINESS SWITCHING =================
+function syncActiveBusinessEntry(){
+  const b = state.businesses.find(x=>x.id===state.activeBusinessId);
+  if(!b) return null;
+  b.category = state.businessCategory;
+  b.business = state.business;
+  b.clients = state.clients;
+  b.orders = state.orders;
+  b.catalogue = state.catalogue;
+  b.inventory = state.inventory;
+  b.vendors = state.vendors;
+  b.expenses = state.expenses;
+  return b;
+}
+function persistBusinessesRegistry(){
+  syncActiveBusinessEntry();
+  persist("businesses", state.businesses);
+  try{ localStorage.setItem("activeBusinessId", state.activeBusinessId||""); }catch(e){}
+}
+function persistBusinessesRegistryImmediate(){
+  syncActiveBusinessEntry();
+  clearTimeout(persistTimers["businesses"]);
+  try{ localStorage.setItem("businesses", JSON.stringify(state.businesses)); }catch(e){}
+  try{ localStorage.setItem("activeBusinessId", state.activeBusinessId||""); }catch(e){}
+}
+// Loads the active business's data into the flat state.* fields the rest of
+// the app reads. Safe to call anytime state.businesses/activeBusinessId are
+// already populated (e.g. after loading, switching, or exiting demo preview).
+function loadRealDataFromStorage(){
+  const entry = state.businesses.find(b=>b.id===state.activeBusinessId);
+  if(!entry) return;
+  state.businessCategory = entry.category;
+  state.business = entry.business;
+  state.clients = entry.clients;
+  state.orders = entry.orders;
+  state.catalogue = entry.catalogue;
+  state.inventory = entry.inventory;
+  state.vendors = entry.vendors;
+  state.expenses = entry.expenses;
+}
+function addBusinessEntry(categoryKey, name){
+  const cfg = CATEGORY_CONFIG[categoryKey] || CATEGORY_CONFIG.tailoring;
+  const entry = {
+    id: uid(), category: categoryKey || "tailoring",
+    business: { name: (name||"").trim() || cfg.defaultBusinessName, phone:"", address:"", currency: (state.business&&state.business.currency)||"₦", regNumber:"", bankAccounts:[], logo:null },
+    clients: [], orders: [], catalogue: { categories: [], items: [] },
+    inventory: { items:[], movements:[] }, vendors: [], expenses: [],
+  };
+  state.businesses.push(entry);
+  return entry;
+}
+function switchBusiness(id){
+  const target = state.businesses.find(b=>b.id===id);
+  if(!target || id===state.activeBusinessId) return;
+  syncActiveBusinessEntry();
+  state.activeBusinessId = id;
+  loadRealDataFromStorage();
+  state.activeCategoryId = null; state.browseCategoryId = null; state.selectedClientId = null;
+  state.modal = null; state.tab = "dashboard";
+  persistBusinessesRegistryImmediate();
+  collapseNav(navDepth);
+  render();
+}
+function deleteBusinessEntry(id){
+  if(state.businesses.length<=1) return;
+  const wasActive = state.activeBusinessId === id;
+  state.businesses = state.businesses.filter(b=>b.id!==id);
+  if(wasActive){
+    switchBusiness(state.businesses[0].id);
+  } else {
+    persistBusinessesRegistryImmediate();
+    render();
+  }
+}
+
 let persistTimers = {};
 function persist(key, value){
   clearTimeout(persistTimers[key]);
   persistTimers[key] = setTimeout(() => { try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){} }, 350);
 }
-const persistClients = () => persist("clients", state.clients);
-const persistOrders = () => persist("orders", state.orders);
-const persistCatalogue = () => persist("catalogue", state.catalogue);
-const persistInventory = () => persist("inventory", state.inventory);
-const persistVendors = () => persist("vendors", state.vendors);
-const persistExpenses = () => persist("expenses", state.expenses);
+const persistClients = persistBusinessesRegistry;
+const persistOrders = persistBusinessesRegistry;
+const persistCatalogue = persistBusinessesRegistry;
+const persistInventory = persistBusinessesRegistry;
+const persistVendors = persistBusinessesRegistry;
+const persistExpenses = persistBusinessesRegistry;
 const persistCreditNotes = () => persist("creditNotes", state.creditNotes);
-const persistBusiness = () => persist("business", state.business);
+const persistBusiness = persistBusinessesRegistry;
 const persistBackupSettings = () => persist("backupSettings", state.backupSettings);
 const persistCloudBackup = () => persist("cloudBackup", state.cloudBackup);
 const persistAccount = () => persist("account", state.account);
@@ -1669,7 +1738,9 @@ function render(){
       '<div class="topbar">'+
         '<div class="brand" data-action="open-welcome" style="cursor:pointer;">'+
           '<div class="brand-badge">'+logoHtml+'</div>'+
-          '<div class="brand-text"><div class="brand-name">'+esc(state.business.name)+'</div><div class="brand-greet">'+greeting()+'</div></div>'+
+          '<div class="brand-text"><div class="brand-name" style="display:flex;align-items:center;gap:5px;">'+esc(state.business.name)+
+            (state.universalAccess ? '<span data-action="open-business-switcher" title="Switch business" style="display:inline-flex;flex-shrink:0;color:var(--ink-soft);">'+icon("swap",12)+'</span>' : '')+
+            '</div><div class="brand-greet">'+greeting()+'</div></div>'+
         '</div>'+
         '<div class="topbar-actions">'+
           '<button class="iconbtn" data-action="start-tour" aria-label="Take a tour">'+icon("help",16)+'</button>'+
@@ -3110,11 +3181,12 @@ function renderExpenseModal(){
 /* ================= SIGNATURE ================= */
 /* ================= BILLING SETTINGS ================= */
 function ensureBilling(b){
-  if(!b.billing) b.billing = { invoicePrefix:"INV", receiptPrefix:"RCT", quotePrefix:"EST", nextInvoiceSeq:1, nextReceiptSeq:1, nextQuoteSeq:1, defaultTaxPercent:0 };
+  if(!b.billing) b.billing = { invoicePrefix:"INV", receiptPrefix:"RCT", quotePrefix:"EST", nextInvoiceSeq:1, nextReceiptSeq:1, nextQuoteSeq:1, defaultTaxPercent:0, taxId:"" };
   if(b.billing.creditNotePrefix===undefined) b.billing.creditNotePrefix = "CRN";
   if(b.billing.nextCreditNoteSeq===undefined) b.billing.nextCreditNoteSeq = 1;
   if(b.billing.debitNotePrefix===undefined) b.billing.debitNotePrefix = "DBN";
   if(b.billing.nextDebitNoteSeq===undefined) b.billing.nextDebitNoteSeq = 1;
+  if(b.billing.taxId===undefined) b.billing.taxId = "";
   return b.billing;
 }
 function ensureDocNumber(order, kind){
@@ -3174,7 +3246,58 @@ function renderBillingCard(b){
         '<div><label>Quote / estimate prefix</label><input data-bind="business.billing.quotePrefix" value="'+esc(billing.quotePrefix)+'" placeholder="EST"></div>'+
         '<div><label>Next quote number</label><div class="mono" style="padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-soft);">'+esc(billing.quotePrefix)+'-'+String(billing.nextQuoteSeq).padStart(4,"0")+'</div></div>'+
         '<div><label>Default tax rate (%)</label><input class="mono" type="number" data-bind="business.billing.defaultTaxPercent" value="'+esc(billing.defaultTaxPercent)+'" placeholder="0"></div>'+
+        '<div style="grid-column:1/-1;"><label>Tax ID</label><input data-bind="business.billing.taxId" value="'+esc(billing.taxId)+'" placeholder="e.g., VAT number, TIN, or Tax ID"></div>'+
       '</div>'+
+    '</div>'
+  );
+}
+
+function renderBusinessSwitcherModal(){
+  const m = state.modal;
+  const body = m.adding ? businessAddFormHtml(m) : businessListHtml();
+  return modalShell(m.adding ? "Add a business" : "Switch business", body);
+}
+function businessListHtml(){
+  return (
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">'+
+      state.businesses.map(b=>{
+        const cfg = CATEGORY_CONFIG[b.category] || CATEGORY_CONFIG.tailoring;
+        const active = b.id === state.activeBusinessId;
+        return '<div class="card" style="padding:12px;display:flex;align-items:center;gap:10px;">'+
+          '<div class="icon-badge" style="background:'+(active?"var(--gold-soft)":"var(--surface)")+';color:var(--ink);border:1px solid var(--line);flex-shrink:0;">'+icon(cfg.icon,16)+'</div>'+
+          '<div style="flex:1;min-width:0;cursor:'+(active?"default":"pointer")+';" '+(active?'':'data-action="switch-business" data-id="'+b.id+'"')+'>'+
+            '<div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(b.business.name)+'</div>'+
+            '<div style="font-size:11px;color:var(--ink-soft);">'+esc(cfg.label.split(" / ")[0])+'</div>'+
+          '</div>'+
+          (active ?
+            '<span class="pill" style="background:var(--gold-soft);color:#8A5F1F;flex-shrink:0;">Active</span>' :
+            '<button class="iconbtn" data-action="switch-business" data-id="'+b.id+'" title="Switch to this business">'+icon("swap",14)+'</button>')+
+          (state.businesses.length>1 ? '<button class="iconbtn" data-action="delete-business" data-id="'+b.id+'" title="Delete business" style="color:var(--rust);">'+icon("trash",13)+'</button>' : '')+
+        '</div>';
+      }).join("")+
+    '</div>'+
+    '<button class="btn ghost" style="width:100%;justify-content:center;" data-action="start-add-business">'+icon("plus",14)+' Add a business</button>'
+  );
+}
+function businessAddFormHtml(m){
+  const form = m.form || (m.form = { category:"tailoring", name:"" });
+  const cfg = CATEGORY_CONFIG[form.category] || CATEGORY_CONFIG.tailoring;
+  return (
+    '<div style="margin-bottom:16px;">'+
+      '<label>Business type</label>'+
+      '<div class="chipbar" style="margin-bottom:14px;">'+
+        CATEGORY_ORDER.filter(k=>k!=="admin").map(key=>{
+          const c = CATEGORY_CONFIG[key];
+          const active = form.category===key;
+          return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="pick-new-business-category" data-cat="'+key+'">'+icon(c.icon,13)+' '+esc(c.label.split(" / ")[0])+'</button>';
+        }).join("")+
+      '</div>'+
+      '<label>Business name</label>'+
+      '<input data-bind="modal.form.name" value="'+esc(form.name)+'" placeholder="'+esc(cfg.namePlaceholder||"e.g. My Business")+'">'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;">'+
+      '<button class="btn ghost sm" data-action="cancel-add-business">Cancel</button>'+
+      '<button class="btn gold sm" style="flex:1;justify-content:center;" data-action="confirm-add-business">'+icon("check",14)+' Create business</button>'+
     '</div>'
   );
 }
@@ -3227,15 +3350,15 @@ function renderBusinessCardSection(b){
         '</div>'+
       '</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;'+(qr?'margin-bottom:14px;':'')+'">'+
-        '<button class="btn gold sm" data-action="download-business-card">'+icon("card",14)+' Download business card</button>'+
-        '<button class="btn ghost sm" data-action="download-contact-card">'+icon("download",14)+' Download contact card (.vcf)</button>'+
+        '<button class="btn gold sm" data-action="share-business-card">'+icon("card",14)+' Share business card</button>'+
+        '<button class="btn ghost sm" data-action="share-contact-card">'+icon("send",14)+' Share contact card (.vcf)</button>'+
         '<button class="btn ghost sm" data-action="generate-account-qr">'+icon("qrcode",14)+' '+(qr?'Regenerate QR code':'Generate QR code')+'</button>'+
       '</div>'+
       (qr ?
         '<div style="border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
           '<img src="'+qr+'" alt="Account QR code" style="width:120px;height:120px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:6px;">'+
-          '<div style="font-size:11.5px;color:var(--ink-soft);max-width:220px;flex:1;min-width:150px;">Scan to save '+esc(b.name||"this business")+'\u2019s contact details straight to a phone.</div>'+
-          '<button class="btn ghost sm" data-action="download-qr-code">'+icon("download",13)+' Download QR</button>'+
+          '<div style="font-size:11.5px;color:var(--ink-soft);max-width:220px;flex:1;min-width:150px;">Scan to save '+esc(b.name||"this business")+'\u2019s contact details straight to a phone. It\u2019s also embedded in your shared business card.</div>'+
+          '<button class="btn ghost sm" data-action="share-qr-code">'+icon("send",13)+' Share QR</button>'+
         '</div>'
       : '')+
     '</div>'
@@ -3251,10 +3374,10 @@ function renderSignatureCard(b){
     '<div class="card" style="margin-bottom:16px;" data-tour-target="signature">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Signature</div>'+
       '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:12px;">Add a signature to stamp on the invoices and receipts you share with '+esc(nounFor("clientPlural")).toLowerCase()+'.</div>'+
-      '<div class="chipbar" style="margin-bottom:14px;">'+
-        '<button class="btn '+(mode==="draw"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="draw">'+icon("edit",13)+' Draw / upload</button>'+
-        '<button class="btn '+(mode==="typed"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="typed">Aa Type</button>'+
-        (mode==="draw" ? '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>' : '')+
+      '<div class="chipbar" style="margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;">'+
+        '<button class="btn '+(mode==="draw"?"gold":"ghost")+' sm" style="flex-shrink:0;" data-action="set-signature-mode" data-mode="draw">'+icon("edit",13)+' Draw</button>'+
+        '<button class="btn '+(mode==="typed"?"gold":"ghost")+' sm" style="flex-shrink:0;" data-action="set-signature-mode" data-mode="typed">Aa Type</button>'+
+        (mode==="draw" ? '<label class="btn ghost sm" style="margin:0;flex-shrink:0;">'+icon("upload",13)+' Upload image<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>' : '')+
       '</div>'+
       (mode==="typed" ? renderSignatureTypedArea(b) : renderSignatureDrawArea(sig))+
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">'+
@@ -3401,6 +3524,14 @@ function renderConsolidatedAccountSettings(){
     
     renderBillingCard(b)+
     
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;" data-tour-target="businesses">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Businesses</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+state.businesses.length+' business'+(state.businesses.length===1?'':'es')+' — each with its own '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+'</span>'+
+        '<button class="btn gold sm" style="width:100%;justify-content:center;" data-action="open-business-switcher">'+icon("swap",14)+' Switch or add a business</button>'+
+      '</div>'
+    : '')+
+    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
@@ -3484,35 +3615,6 @@ function renderConsolidatedAccountSettings(){
       '</div>'
     : '')+
     
-    '<div class="card" style="margin-bottom:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
-      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
-    '</div>'+
-    
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
-        '<div class="chipbar">'+
-          CATEGORY_ORDER.map(key => {
-            const cfg = CATEGORY_CONFIG[key];
-            const active = activeCategoryKey()===key;
-            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
-          }).join("")+
-        '</div>'+
-      '</div>'
-    : '')+
-    
-    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
-      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
-        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
-      '</div>'+
-    '</div>'+
-    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
       '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
@@ -3536,6 +3638,35 @@ function renderConsolidatedAccountSettings(){
           '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
         '</div>'+
         '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
+      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
+    '</div>'+
+    
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
+        '<div class="chipbar">'+
+          CATEGORY_ORDER.map(key => {
+            const cfg = CATEGORY_CONFIG[key];
+            const active = activeCategoryKey()===key;
+            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
+          }).join("")+
+        '</div>'+
+      '</div>'
+    : '')+
+    
+    '<div class="card" style="margin-bottom:16px;border-color:var(--rust);">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
+        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
       '</div>'+
     '</div>'+
     
@@ -3573,6 +3704,7 @@ function renderConsolidatedAccountSettings(){
 /* ================= MODAL ================= */
 function renderModal(){
   if(!state.modal) return "";
+  if(state.modal.type==="business-switcher") return renderBusinessSwitcherModal();
   if(state.modal.type==="client") return renderClientModal();
   if(state.modal.type==="order") return renderOrderModal();
   if(state.modal.type==="creditnote") return renderCreditNoteModal();
@@ -5583,6 +5715,16 @@ document.addEventListener("click", (e) => {
         state.businessCategory = "admin";
         state.business = { name:"Multiple Business Access", logo:"" };
         state.clients = []; state.orders = []; state.catalogue = { categories:[], items:[] };
+        
+        // Initialize businesses array for admin
+        state.businesses = [{
+          id: uid(), category: "admin",
+          business: state.business,
+          clients: [], orders: [], catalogue: { categories:[], items:[] },
+          inventory: { items:[], movements:[] }, vendors: [], expenses: [],
+        }];
+        state.activeBusinessId = state.businesses[0].id;
+        
         if(supportsWebAuthn() && !hasBiometricForAccount()){
           setTimeout(() => { askConfirm({ title:"Enable fingerprint sign-in?", body:"Use it on this device next time you sign in.", confirmLabel:"Enable", onConfirm: registerBiometric }); }, 300);
         }
@@ -5625,6 +5767,17 @@ document.addEventListener("click", (e) => {
         state.creditNotes = [];
         state.catalogue = { categories: [], items: [] };
         state.business = { name: name||cfg.defaultBusinessName, phone:"", address:"", currency: state.business.currency||"₦", regNumber:"", bankAccounts:[], logo:null };
+        
+        // Initialize businesses array with the first business
+        const category = state.pendingCategory || "tailoring";
+        state.businesses = [{
+          id: uid(), category: category,
+          business: state.business,
+          clients: [], orders: [], catalogue: { categories:[], items:[] },
+          inventory: { items:[], movements:[] }, vendors: [], expenses: [],
+        }];
+        state.activeBusinessId = state.businesses[0].id;
+        
         persistClients(); persistOrders(); persistCatalogue(); persistBusiness(); persistCreditNotes();
         state.account = { name, email, password };
         persistAccount();
@@ -5669,6 +5822,23 @@ document.addEventListener("click", (e) => {
         state.tab = "dashboard";
       }
       render();
+      break;
+    }
+    case "open-business-switcher": state.modal = { type:"business-switcher", adding:false, form:null }; pushNav(); render(); break;
+    case "switch-business": switchBusiness(id); break;
+    case "delete-business": {
+      const target = state.businesses.find(x=>x.id===id);
+      askConfirm({ title:"Delete this business?", body:"This permanently removes its clients, "+nounFor("recordPlural").toLowerCase()+", "+nounFor("catalogue").toLowerCase()+" and everything else stored under \""+((target&&target.business&&target.business.name)||"this business")+"\". This cannot be undone.", confirmLabel:"Delete", danger:true,
+        onConfirm: () => { deleteBusinessEntry(id); render(); } });
+      break;
+    }
+    case "start-add-business": state.modal.adding = true; state.modal.form = { category:"tailoring", name:"" }; render(); break;
+    case "cancel-add-business": state.modal.adding = false; state.modal.form = null; render(); break;
+    case "pick-new-business-category": if(state.modal && state.modal.form) state.modal.form.category = el.getAttribute("data-cat"); render(); break;
+    case "confirm-add-business": {
+      const form = (state.modal && state.modal.form) || {};
+      const entry = addBusinessEntry(form.category, form.name);
+      switchBusiness(entry.id);
       break;
     }
     case "toggle-auth-mode": {
@@ -5895,17 +6065,17 @@ document.addEventListener("click", (e) => {
     case "download-license-document":
       downloadLicenseDocument();
       break;
-    case "download-business-card":
-      downloadBusinessCard();
+    case "share-business-card":
+      shareBusinessCard();
       break;
-    case "download-contact-card":
-      downloadContactCard();
+    case "share-contact-card":
+      shareContactCard();
       break;
     case "generate-account-qr":
       generateAccountQr();
       break;
-    case "download-qr-code":
-      downloadQrCode();
+    case "share-qr-code":
+      shareQrCode();
       break;
     case "open-change-password-modal":
       state.modal = { type:"change-password" };
@@ -6015,8 +6185,10 @@ function exportOrdersCsv(){
 // Shared shape for every backup we produce (download, share sheet, cloud
 // folder, or the credentialed account export below).
 function buildBackupPayload(){
+  syncActiveBusinessEntry();
   return {
     app: "BizDeck", version: 1, exportedAt: new Date().toISOString(),
+    businesses: state.businesses, activeBusinessId: state.activeBusinessId,
     clients: state.clients, orders: state.orders, catalogue: state.catalogue, inventory: state.inventory, vendors: state.vendors, expenses: state.expenses, creditNotes: state.creditNotes,
     business: state.business, theme: state.theme || "indigo", darkMode: state.darkMode||false, customThemeColors: state.customThemeColors||null,
     businessCategory: state.businessCategory || null, universalAccess: !!state.universalAccess,
@@ -6059,51 +6231,98 @@ function downloadCredentialFile(baseName, _value, contents){
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-function downloadContactCard(){
+// Builds the shareable business card as a standalone, flat-edged HTML
+// string (never the on-screen rounded preview) so exported/shared images
+// always have plain, square corners — no transparent rounded-corner
+// artifacts when dropped into WhatsApp, Messages, etc. Embeds the account
+// QR code (if one has been generated) so the shared card doubles as a
+// scannable contact card.
+function buildBusinessCardHtml(b, qrDataUrl){
+  const primary = themeColor("primary"), primaryDark = themeColor("primary-dark");
+  const initials = businessInitials(b.name);
+  const email = (b.email || (state.account && state.account.email) || "").trim();
+  const logoBlock = b.logo
+    ? '<img src="'+b.logo+'" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover;flex-shrink:0;">'
+    : '<div style="width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-weight:600;font-size:20px;flex-shrink:0;">'+esc(initials)+'</div>';
+  return '<div style="width:480px;padding:28px;background:linear-gradient(135deg, '+primary+' 0%, '+primaryDark+' 100%);color:#fff;font-family:Georgia,serif;box-sizing:border-box;">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">'+
+      '<div style="display:flex;align-items:center;gap:14px;min-width:0;flex:1;">'+
+        logoBlock+
+        '<div style="min-width:0;">'+
+          '<div style="font-weight:600;font-size:19px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.name||"Your Business")+'</div>'+
+          (b.regNumber ? '<div style="font-size:11px;opacity:.75;margin-top:2px;">'+esc(b.regNumber)+'</div>' : '')+
+        '</div>'+
+      '</div>'+
+      (qrDataUrl ? '<div style="background:#fff;padding:6px;border-radius:8px;flex-shrink:0;line-height:0;"><img src="'+qrDataUrl+'" style="width:76px;height:76px;display:block;"></div>' : '')+
+    '</div>'+
+    '<div style="height:1px;background:rgba(255,255,255,0.25);margin:18px 0;"></div>'+
+    '<div style="font-size:13px;line-height:1.7;opacity:.95;">'+
+      (b.phone ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'+icon("phone",13)+'<span>'+esc(b.phone)+'</span></div>' : '')+
+      (email ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'+icon("mail",13)+'<span>'+esc(email)+'</span></div>' : '')+
+      (b.address ? '<div style="display:flex;align-items:center;gap:8px;">'+icon("pin",13)+'<span>'+esc(b.address)+'</span></div>' : '')+
+    '</div>'+
+    (qrDataUrl ? '<div style="margin-top:16px;font-size:10.5px;opacity:.75;text-align:center;">Scan the QR code to save this contact</div>' : '')+
+  '</div>';
+}
+
+async function shareContactCard(){
   const vcard = buildBusinessVCard(state.business);
-  const blob = new Blob([vcard], {type:"text/vcard;charset=utf-8;"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = safeFileSlug(state.business.name)+"-contact.vcf";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const file = new File([vcard], safeFileSlug(state.business.name)+"-contact.vcf", {type:"text/vcard;charset=utf-8;"});
+  if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+    try{ await navigator.share({files:[file], title: file.name}); return; }
+    catch(e){ if(e && e.name==="AbortError") return; }
+  }
+  downloadFile(file);
 }
 
-function downloadBusinessCard(){
-  const el = document.getElementById("bizCardCanvas");
-  if(!el || typeof html2canvas === "undefined"){ showToast("Couldn't generate the business card image", "error"); return; }
-  html2canvas(el, {backgroundColor:null, scale:3}).then(canvas => {
-    canvas.toBlob(blob => {
-      if(!blob){ showToast("Couldn't generate the business card image", "error"); return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = safeFileSlug(state.business.name)+"-card.png";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    });
-  }).catch(() => { showToast("Couldn't generate the business card image", "error"); });
+async function shareBusinessCard(){
+  const business = state.business;
+  const qr = state.accountQrDataUrl || generateAccountQr(true);
+  try{
+    const html = buildBusinessCardHtml(business, qr);
+    const file = await cardToFile(html, safeFileSlug(business.name)+"-card", 480);
+    const caption = (business.name||"My business")+" — contact card";
+    await shareImageFile(file, caption, "");
+  }catch(e){
+    console.error("Business card share error:", e);
+    showToast("Couldn't generate the business card image", "error");
+  }
 }
 
-function generateAccountQr(){
-  if(typeof qrcode === "undefined"){ showToast("QR code library not available", "error"); return; }
+// Pass silent=true to generate/refresh the QR without toasting on failure
+// or forcing a render — used when another action (like sharing the
+// business card) needs the data URL right away.
+function generateAccountQr(silent){
+  if(typeof qrcode === "undefined"){ if(!silent) showToast("QR code library not available", "error"); return null; }
   try{
     const text = buildBusinessVCard(state.business);
     const qr = qrcode(0, "M");
     qr.addData(text);
     qr.make();
     state.accountQrDataUrl = qr.createDataURL(6, 8);
-    render();
+    if(!silent) render();
+    return state.accountQrDataUrl;
   }catch(e){
     console.error("QR generation error:", e);
-    showToast("Couldn't generate the QR code", "error");
+    if(!silent) showToast("Couldn't generate the QR code", "error");
+    return null;
   }
 }
 
-function downloadQrCode(){
+async function shareQrCode(){
   if(!state.accountQrDataUrl){ showToast("Generate the QR code first", "error"); return; }
-  const a = document.createElement("a");
-  a.href = state.accountQrDataUrl; a.download = safeFileSlug(state.business.name)+"-qr.png";
-  document.body.appendChild(a); a.click(); a.remove();
+  try{
+    const blob = await (await fetch(state.accountQrDataUrl)).blob();
+    const file = new File([blob], safeFileSlug(state.business.name)+"-qr.png", {type:"image/png"});
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      try{ await navigator.share({files:[file], title: file.name}); return; }
+      catch(e){ if(e && e.name==="AbortError") return; }
+    }
+    downloadFile(file);
+  }catch(e){
+    console.error("QR share error:", e);
+    showToast("Couldn't share the QR code", "error");
+  }
 }
 
 function exportWithLicense(){
@@ -6538,15 +6757,29 @@ function completeImportWithCredentials(){
   persistBusinessCategory();
   persistUniversalAccess();
 
-  // Restore account data
-  state.clients = data.clients || [];
-  state.orders = data.orders || [];
-  state.catalogue = data.catalogue || { categories: [], items: [] };
-  state.inventory = data.inventory;
-  state.vendors = data.vendors || [];
-  state.expenses = data.expenses || [];
-  state.creditNotes = data.creditNotes || [];
-  state.business = data.business || { name: data.accountName || "My Business", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null };
+  // Restore businesses registry if available, otherwise create from legacy data
+  if(data.businesses && Array.isArray(data.businesses) && data.businesses.length){
+    state.businesses = data.businesses;
+    state.activeBusinessId = (data.activeBusinessId && state.businesses.some(b=>b.id===data.activeBusinessId)) ? data.activeBusinessId : state.businesses[0].id;
+    loadRealDataFromStorage();
+  } else {
+    // Legacy format: create a single business entry from flat data
+    const entry = {
+      id: uid(), 
+      category: state.businessCategory || "others",
+      business: data.business || { name: data.accountName || "My Business", phone:"", address:"", currency:"₦", regNumber:"", bankAccounts:[], logo:null },
+      clients: data.clients || [],
+      orders: data.orders || [],
+      catalogue: data.catalogue || { categories: [], items: [] },
+      inventory: data.inventory || { items:[], movements:[] },
+      vendors: data.vendors || [],
+      expenses: data.expenses || [],
+    };
+    state.businesses = [entry];
+    state.activeBusinessId = entry.id;
+    loadRealDataFromStorage();
+  }
+  
   if(data.theme) state.theme = data.theme;
   if(typeof data.darkMode !== 'undefined') state.darkMode = data.darkMode;
   if(data.customThemeColors) state.customThemeColors = data.customThemeColors;
