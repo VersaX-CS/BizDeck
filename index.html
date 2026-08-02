@@ -3681,10 +3681,9 @@ function renderConsolidatedAccountSettings(){
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);">📦 Full account backup (everything)</div>'+
       '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account with data, clients, orders, and credentials</div>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-        '<button class="btn gold sm" data-action="export-everything">'+icon("download",14)+' Export</button>'+
-        '<button class="btn wa sm" data-action="share-everything">'+icon("send",14)+' Share</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",14)+' Import<input type="file" accept=".bizdeck,application/json" data-action="import-from-file" style="display:none;"></label>'+
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">'+
+        '<button class="btn gold sm" style="flex:1;justify-content:center;" data-action="export-everything">'+icon("download",14)+' Export</button>'+
+        '<label class="btn ghost sm" style="flex:1;justify-content:center;margin:0;">'+icon("upload",14)+' Import<input type="file" accept=".bizdeck,application/json" data-action="import-from-file" style="display:none;"></label>'+
       '</div>'+
       '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--ink);border-top:1px solid var(--line);padding-top:12px;">📋 Quick exports</div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'+
@@ -3710,7 +3709,7 @@ function renderConsolidatedAccountSettings(){
         '<div class="icon-badge" style="background:var(--green-soft);color:var(--green);">'+icon("cloud",16)+'</div>'+
         '<div class="disp" style="font-weight:600;font-size:14.5px;">Cloud backup</div>'+
       '</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+(supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Use Share backup file to save to a cloud app')+'</span>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+(supportsFSAccess() ? 'Sync a local folder to your cloud drive' : 'Tap Share, then pick your Drive/OneDrive/Dropbox app')+'</span>'+
       (!supportsFSAccess() ?
         '<button class="btn gold sm" data-action="share-backup-with-license">'+icon("send",14)+' Share account backup</button>'
         :
@@ -6587,15 +6586,17 @@ function shareBackupWithLicense(){
     accountName: state.account.name
   });
   const stamp = new Date().toISOString().slice(0,10);
-  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"text/plain"});
-  if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
+  const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
+  if(!navigator.share){
     exportWithLicense();
     showToast("Sharing isn't available here — downloaded the backup instead", "info");
     return;
   }
   navigator.share({ files:[file], title:"BizDeck account backup" }).catch((e)=>{
-    if(e && e.name==="AbortError") return;
+    if(e && e.name==="AbortError") return; // user cancelled the share sheet
+    console.error("Share error:", e);
     exportWithLicense();
+    showToast("Sharing isn't available here — downloaded the backup instead", "info");
   });
 }
 
@@ -6795,14 +6796,21 @@ async function idbDelete(key){
 
 async function connectCloudFolder(){
   if(!supportsFSAccess()){
-    showToast("This browser can't write to a folder directly — use Share backup file instead.", "error");
+    showToast("This browser/device can't write directly to a folder — use Export instead, then move the file into your cloud app manually.", "error");
+    return;
+  }
+  if(!window.isSecureContext){
+    showToast("Cloud folder backup needs a secure (https) connection — it won't work here. Use Export instead.", "error");
     return;
   }
   let handle;
   try{
     handle = await window.showDirectoryPicker({ id:"bizdeck-cloud-backup", mode:"readwrite", startIn:"documents" });
   }catch(err){
-    return; // person cancelled the picker
+    if(err && err.name === "AbortError") return; // person cancelled the picker
+    console.error("Folder picker error:", err);
+    showToast("Couldn't open the folder picker: "+(err && err.message ? err.message : "unknown error"), "error");
+    return;
   }
   try{
     const perm = await handle.requestPermission({ mode:"readwrite" });
@@ -6816,7 +6824,8 @@ async function connectCloudFolder(){
     showToast('Connected to "'+handle.name+'" — saving a backup there now.', "success");
     backupToCloudFolder(true);
   }catch(err){
-    showToast("Couldn't connect to that folder.", "error");
+    console.error("Cloud folder connect error:", err);
+    showToast("Couldn't connect to that folder: "+(err && err.message ? err.message : "unknown error"), "error");
   }
 }
 
@@ -6929,7 +6938,8 @@ async function backupToCloudFolder(silent){
     render();
     return true;
   }catch(err){
-    if(!silent) showToast("Couldn't write to that folder — your cloud app (Drive/OneDrive/etc.) may be syncing or locking it right now. Wait a moment and tap Backup now again.", "error");
+    console.error("Cloud folder write error:", err);
+    if(!silent) showToast("Couldn't write to that folder ("+(err && err.message ? err.message : "unknown error")+") — your cloud app (Drive/OneDrive/etc.) may be syncing or locking it right now. Wait a moment and tap Backup now again.", "error");
     return false;
   }
 }
