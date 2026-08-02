@@ -31,6 +31,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.0.3/qrcode.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Sacramento&family=Caveat:wght@500;700&family=Parisienne&display=swap');
   :root{
@@ -373,6 +374,8 @@ const ICONS = {
   cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-8.98A6 6 0 0 1 18 8.5a4 4 0 0 1-1 7.5H7z"/><path d="M12 12v6M9.5 15.5L12 18l2.5-2.5"/>',
   home:'<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"/><path d="M10 21v-6h4v6"/>',
   sliders:'<path d="M4 6h9M17 6h3M4 12h3M9 12h11M4 18h13M19 18h1"/><circle cx="14" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  qrcode:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14v3h2M14 19h2M19 19.5h2"/>',
+  card:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 9.5h19"/><path d="M6 14h5M6 16.5h3"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -1524,6 +1527,8 @@ async function tryBiometricSignIn(auto){
   if(!supportsWebAuthn()) return false;
   const rec = getBiometricRecord();
   if(!rec || !state.account || rec.email !== state.account.email) return false;
+  state.biometricWaiting = true;
+  render();
   try{
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const assertion = await navigator.credentials.get({ publicKey: {
@@ -1532,11 +1537,13 @@ async function tryBiometricSignIn(auto){
     }});
     if(assertion){
       state.authed = true; state.viewOnly = false; state.authError = null;
-      render();
       return true;
     }
   }catch(e){
-    if(!auto){ state.authError = "Fingerprint sign-in failed or was cancelled."; render(); }
+    if(!auto){ state.authError = "Fingerprint sign-in failed or was cancelled."; }
+  } finally {
+    state.biometricWaiting = false;
+    render();
   }
   return false;
 }
@@ -1919,6 +1926,20 @@ async function cardToFile(html, filenameBase, widthPx){
     document.body.removeChild(holder);
   }
 }
+async function cardToDataUrl(html, widthPx){
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:fixed;left:-9999px;top:0;";
+  holder.style.width = (widthPx||480)+"px";
+  holder.innerHTML = html;
+  document.body.appendChild(holder);
+  try{
+    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+    const canvas = await html2canvas(holder, {backgroundColor:"#ffffff", scale:2});
+    return canvas.toDataURL("image/png");
+  } finally {
+    document.body.removeChild(holder);
+  }
+}
 function downloadFile(file){
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
@@ -1946,6 +1967,18 @@ async function shareInvoiceImage(order, client, kind, mode){
   const caption = (kind==="receipt"?"Receipt":kind==="quote"?"Estimate":"Invoice")+" from "+(business.name||"")+(order.title?(" — "+order.title):"");
   await shareImageFile(file, caption, client?client.phone:"");
 }
+async function previewInvoiceImage(order, client, kind){
+  const business = state.business;
+  const html = buildInvoiceCardHtml(order, client, business, kind);
+  const label = kind==="receipt"?"Receipt":kind==="quote"?"Estimate":"Invoice";
+  try{
+    const dataUrl = await cardToDataUrl(html, 480);
+    openLightbox([dataUrl], 0, [label]);
+  }catch(e){
+    console.error("Preview error:", e);
+    showToast("Couldn't generate the preview", "error");
+  }
+}
 async function shareReminderImage(order, client, bal, mode){
   const business = state.business;
   const html = buildReminderCardHtml(order, client, bal, business);
@@ -1954,6 +1987,17 @@ async function shareReminderImage(order, client, bal, mode){
   if(mode==="download"){ downloadFile(file); return; }
   const caption = "Payment reminder from "+(business.name||"");
   await shareImageFile(file, caption, client?client.phone:"");
+}
+async function previewReminderImage(order, client, bal){
+  const business = state.business;
+  const html = buildReminderCardHtml(order, client, bal, business);
+  try{
+    const dataUrl = await cardToDataUrl(html, 420);
+    openLightbox([dataUrl], 0, ["Payment reminder"]);
+  }catch(e){
+    console.error("Preview error:", e);
+    showToast("Couldn't generate the preview", "error");
+  }
 }
 async function sharePriceListImage(mode){
   const business = state.business;
@@ -2941,6 +2985,68 @@ function renderBillingCard(b){
   );
 }
 
+function businessInitials(name){
+  return (name||"T S").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+}
+function vcardEscape(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+}
+function buildBusinessVCard(b){
+  const email = (b.email || (state.account && state.account.email) || "").trim();
+  const lines = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    "FN:"+vcardEscape(b.name||"Business"),
+    "ORG:"+vcardEscape(b.name||"Business"),
+  ];
+  if(b.phone) lines.push("TEL;TYPE=WORK,VOICE:"+vcardEscape(b.phone));
+  if(email) lines.push("EMAIL;TYPE=WORK:"+vcardEscape(email));
+  if(b.address) lines.push("ADR;TYPE=WORK:;;"+vcardEscape(b.address)+";;;;");
+  lines.push("END:VCARD");
+  return lines.join("\r\n");
+}
+function safeFileSlug(name){
+  return (name||"business").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"") || "business";
+}
+function renderBusinessCardSection(b){
+  const initials = businessInitials(b.name);
+  const email = (b.email || (state.account && state.account.email) || "").trim();
+  const logoBlock = b.logo
+    ? '<img src="'+b.logo+'" alt="" style="width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;">'
+    : '<div style="width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;font-family:\'Fraunces\',serif;font-weight:600;font-size:19px;flex-shrink:0;">'+esc(initials)+'</div>';
+  const qr = state.accountQrDataUrl;
+  return (
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="business-card">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business card, contact card &amp; QR code</div>'+
+      '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:14px;">Share your business details as a card image, a contact file '+esc(nounFor("clientPlural")).toLowerCase()+' can save, or a scannable QR code.</div>'+
+      '<div id="bizCardCanvas" style="border-radius:14px;padding:20px;background:linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);color:#fff;margin-bottom:14px;">'+
+        '<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">'+
+          logoBlock+
+          '<div style="min-width:0;">'+
+            '<div class="disp" style="font-weight:600;font-size:17px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(b.name||"Your Business")+'</div>'+
+            (b.regNumber ? '<div style="font-size:10.5px;opacity:.75;margin-top:2px;">'+esc(b.regNumber)+'</div>' : '')+
+          '</div>'+
+        '</div>'+
+        '<div style="font-size:12px;line-height:1.6;opacity:.95;">'+
+          (b.phone ? '<div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">'+icon("phone",12)+'<span>'+esc(b.phone)+'</span></div>' : '')+
+          (email ? '<div style="display:flex;align-items:center;gap:7px;">'+icon("mail",12)+'<span>'+esc(email)+'</span></div>' : '')+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;'+(qr?'margin-bottom:14px;':'')+'">'+
+        '<button class="btn gold sm" data-action="download-business-card">'+icon("card",14)+' Download business card</button>'+
+        '<button class="btn ghost sm" data-action="download-contact-card">'+icon("download",14)+' Download contact card (.vcf)</button>'+
+        '<button class="btn ghost sm" data-action="generate-account-qr">'+icon("qrcode",14)+' '+(qr?'Regenerate QR code':'Generate QR code')+'</button>'+
+      '</div>'+
+      (qr ?
+        '<div style="border-top:1px solid var(--line);padding-top:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'+
+          '<img src="'+qr+'" alt="Account QR code" style="width:120px;height:120px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:6px;">'+
+          '<div style="font-size:11.5px;color:var(--ink-soft);max-width:220px;flex:1;min-width:150px;">Scan to save '+esc(b.name||"this business")+'\u2019s contact details straight to a phone.</div>'+
+          '<button class="btn ghost sm" data-action="download-qr-code">'+icon("download",13)+' Download QR</button>'+
+        '</div>'
+      : '')+
+    '</div>'
+  );
+}
 function renderSignatureCard(b){
   if(!b.signature){
     b.signature = { mode:"draw", image:null, text:"", font:"Dancing Script", showOnInvoice:true, showOnReceipt:true };
@@ -2954,6 +3060,7 @@ function renderSignatureCard(b){
       '<div class="chipbar" style="margin-bottom:14px;">'+
         '<button class="btn '+(mode==="draw"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="draw">'+icon("edit",13)+' Draw / upload</button>'+
         '<button class="btn '+(mode==="typed"?"gold":"ghost")+' sm" data-action="set-signature-mode" data-mode="typed">Aa Type</button>'+
+        (mode==="draw" ? '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>' : '')+
       '</div>'+
       (mode==="typed" ? renderSignatureTypedArea(b) : renderSignatureDrawArea(sig))+
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">'+
@@ -2973,7 +3080,6 @@ function renderSignatureDrawArea(sig){
       '<div class="sig-preview-box" style="margin-bottom:10px;"><img src="'+sig.image+'" alt="Signature" style="max-width:100%;max-height:100px;object-fit:contain;"></div>'+
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
         '<button class="btn ghost sm" data-action="start-signature-redraw">'+icon("edit",13)+' Redraw</button>'+
-        '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
         '<button class="btn ghost sm" style="color:var(--rust);" data-action="remove-signature">'+icon("trash",13)+' Remove</button>'+
       '</div>'
     );
@@ -2984,7 +3090,6 @@ function renderSignatureDrawArea(sig){
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       '<button class="btn ghost sm" data-action="clear-signature-canvas">'+icon("x",13)+' Clear</button>'+
       '<button class="btn gold sm" data-action="save-signature-canvas">'+icon("check",13)+' Save signature</button>'+
-      '<label class="btn ghost sm" style="margin:0;">'+icon("upload",13)+' Upload image instead<input type="file" accept="image/*" data-action="upload-signature-image" style="display:none;"></label>'+
       (sig.image ? '<button class="btn ghost sm" data-action="cancel-signature-redraw">Cancel</button>' : '')+
     '</div>'
   );
@@ -3050,34 +3155,10 @@ function renderConsolidatedAccountSettings(){
   const logoHtml = b.logo ? '<img src="'+b.logo+'" alt="Business logo">' : icon("upload",20);
   
   return (
-    // ===== ACCOUNT CREDENTIALS & LICENSE =====
-    (state.account && state.auth ? 
-      '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
-        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials & license</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key, password, and license document</span>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
-        '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show</button>'+
-          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy</button>'+
-          '<button class="btn ghost sm" data-action="download-access-key-file">'+icon("download",14)+' Download</button>'+
-        '</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
-        '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-          '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
-          '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
-          '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
-        '</div>'+
-        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">License document</div>'+
-        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account and license information</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
-          '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
-          '<button class="btn ghost sm" data-action="view-license-modal">'+icon("eye",14)+' View details</button>'+
-        '</div>'+
-        '<div style="font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately and delete from Downloads. Keep your password secure.</div>'+
-      '</div>'
-    : '')+
+    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
+      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
+      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
+    '</div>'+
     
     (!state.universalAccess && state.account ? 
       '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(184,132,46,0.08) 0%, rgba(184,132,46,0.04) 100%);border:1.5px solid var(--gold);position:relative;overflow:hidden;">'+
@@ -3098,11 +3179,16 @@ function renderConsolidatedAccountSettings(){
       '<div class="grid-form2">'+
         '<div><label>Business name</label><input data-bind="business.name" value="'+esc(b.name)+'"></div>'+
         '<div><label>Phone</label><input data-bind="business.phone" value="'+esc(b.phone)+'"></div>'+
-        '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
+        '<div><label>Email</label><input type="email" data-bind="business.email" value="'+esc(b.email||"")+'" placeholder="'+esc((state.account&&state.account.email)||"business@example.com")+'"></div>'+
         '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
+        '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
         '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="RC 1234567"></div>'+
       '</div>'+
     '</div>'+
+    
+    renderBusinessCardSection(b)+
+    
+    renderSignatureCard(b)+
     
     '<div class="card" style="margin-bottom:16px;" data-tour-target="bank-details">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Bank account details</div>'+
@@ -3119,59 +3205,7 @@ function renderConsolidatedAccountSettings(){
       '<button class="btn ghost sm" data-action="add-bank-account">'+icon("plus",14)+' Add another account</button>'+
     '</div>'+
     
-    renderSignatureCard(b)+
     renderBillingCard(b)+
-    
-    '<div class="card" style="margin-bottom:16px;">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
-      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
-    '</div>'+
-    
-    (state.universalAccess ?
-      '<div class="card" style="margin-bottom:16px;">'+
-        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
-        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
-        '<div class="chipbar">'+
-          CATEGORY_ORDER.map(key => {
-            const cfg = CATEGORY_CONFIG[key];
-            const active = activeCategoryKey()===key;
-            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
-          }).join("")+
-        '</div>'+
-      '</div>'
-    : '')+
-    
-    '<div class="card" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'+
-      '<div><div class="disp" style="font-weight:600;font-size:14.5px;">Guided tour</div></div>'+
-      '<button class="btn ghost sm" data-action="start-tour">'+icon("help",14)+' Take the tour</button>'+
-    '</div>'+
-    
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
-        Object.keys(THEMES).filter(k=>k!=="custom").map(key => {
-          const t = THEMES[key];
-          const active = (state.theme||"indigo")===key;
-          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'"><span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span><span class="swatch-label">'+t.label+'</span></button>';
-        }).join("")+
-        (state.customThemeColors ? (
-          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours"><span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span><span class="swatch-label">My colours</span><span data-action="open-custom-theme-modal" title="Edit colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span></div>'
-        ) : (
-          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add custom colour"><span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span><span class="swatch-label">Custom</span></button>'
-        ))+
-      '</div>'+
-    '</div>'+
-    
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="dark-mode">'+
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
-        '<div style="display:flex;align-items:center;gap:10px;">'+
-          '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
-          '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
-        '</div>'+
-        '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
-      '</div>'+
-    '</div>'+
     
     '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
@@ -3226,6 +3260,91 @@ function renderConsolidatedAccountSettings(){
       )+
     '</div>'+
     
+    // ===== ACCOUNT CREDENTIALS & LICENSE =====
+    (state.account && state.auth ? 
+      '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(62,107,79,0.08) 0%, rgba(62,107,79,0.04) 100%);border:1.5px solid var(--green);">'+
+        '<div class="disp" style="font-weight:700;font-size:14.5px;margin-bottom:8px;color:var(--green);">🔐 Account credentials & license</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:10px;">Sign-in key, password, and license document</span>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;">Access key</div>'+
+        '<div id="accessKeyDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+          '<button class="btn ghost sm" data-action="toggle-access-key" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-access-key">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-access-key-file">'+icon("download",14)+' Download</button>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">Password</div>'+
+        '<div id="accountPasswordDisplay" style="background:var(--surface);padding:8px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;font-size:11px;word-break:break-all;"><code style="color:var(--ink-soft);">••••••••••••••••</code></div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
+          '<button class="btn ghost sm" data-action="toggle-account-password" data-display="hidden">'+icon("eye",14)+' Show</button>'+
+          '<button class="btn ghost sm" data-action="copy-account-password">'+icon("check",14)+' Copy</button>'+
+          '<button class="btn ghost sm" data-action="download-password-file">'+icon("download",14)+' Download</button>'+
+          '<button class="btn ghost sm" data-action="open-change-password-modal">'+icon("edit",14)+' Change</button>'+
+        '</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;border-top:1px solid var(--line);padding-top:12px;">License document</div>'+
+        '<div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px;">Complete account and license information</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+
+          '<button class="btn ghost sm" data-action="download-license-document">'+icon("download",14)+' Download license</button>'+
+          '<button class="btn ghost sm" data-action="view-license-modal">'+icon("eye",14)+' View details</button>'+
+        '</div>'+
+        '<div style="font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:10px;">⚠️ Store downloaded files privately and delete from Downloads. Keep your password secure.</div>'+
+      '</div>'
+    : '')+
+    
+    '<div class="card" style="margin-bottom:16px;">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Session</div>'+
+      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">'+esc((state.account&&state.account.email)||DEMO_EMAIL)+'</span>'+
+      '<div><button class="btn rust sm" data-action="sign-out">'+icon("back",14)+' Sign out</button></div>'+
+    '</div>'+
+    
+    (state.universalAccess ?
+      '<div class="card" style="margin-bottom:16px;">'+
+        '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Business module</div>'+
+        '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Premium key</span>'+
+        '<div class="chipbar">'+
+          CATEGORY_ORDER.map(key => {
+            const cfg = CATEGORY_CONFIG[key];
+            const active = activeCategoryKey()===key;
+            return '<button class="btn '+(active?"gold":"ghost")+' sm" data-action="switch-module" data-cat="'+key+'">'+icon(cfg.icon,13)+' '+esc(cfg.label.split(" / ")[0])+'</button>';
+          }).join("")+
+        '</div>'+
+      '</div>'
+    : '')+
+    
+    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
+      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
+        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="appearance">'+
+      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:10px;">Appearance</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(76px,1fr));gap:10px;">'+
+        Object.keys(THEMES).filter(k=>k!=="custom").map(key => {
+          const t = THEMES[key];
+          const active = (state.theme||"indigo")===key;
+          return '<button class="theme-swatch '+(active?"active":"")+'" data-action="select-theme" data-theme="'+key+'" title="'+t.label+'"><span class="swatch-circle" style="background:linear-gradient(135deg, '+t.vars.primary+' 50%, '+t.vars.gold+' 50%);"></span><span class="swatch-label">'+t.label+'</span></button>';
+        }).join("")+
+        (state.customThemeColors ? (
+          '<div class="theme-swatch '+((state.theme||"")==="custom"?"active":"")+'" style="cursor:pointer;position:relative;" data-action="select-theme" data-theme="custom" title="My colours"><span class="swatch-circle" style="background:linear-gradient(135deg, '+state.customThemeColors.primary+' 50%, '+state.customThemeColors.gold+' 50%);"></span><span class="swatch-label">My colours</span><span data-action="open-custom-theme-modal" title="Edit colours" style="position:absolute;top:2px;right:6px;width:20px;height:20px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",11)+'</span></div>'
+        ) : (
+          '<button class="theme-swatch" data-action="open-custom-theme-modal" title="Add custom colour"><span class="swatch-circle" style="background:var(--surface);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-soft);">'+icon("palette",16)+'</span><span class="swatch-label">Custom</span></button>'
+        ))+
+      '</div>'+
+    '</div>'+
+    
+    '<div class="card" style="margin-bottom:16px;" data-tour-target="dark-mode">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<div class="icon-badge" style="background:var(--gold-soft);color:var(--ink);">'+icon("moon",16)+'</div>'+
+          '<div style="font-size:13.5px;font-weight:600;">Dark mode</div>'+
+        '</div>'+
+        '<label class="switch"><input type="checkbox" data-action="toggle-dark-mode" '+(state.darkMode?"checked":"")+'><span class="slider"></span></label>'+
+      '</div>'+
+    '</div>'+
+    
     '<div class="card" style="margin-bottom:16px;">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Data & privacy note</div>'+
       '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Storage, backups, access, indemnity</span>'+
@@ -3241,17 +3360,18 @@ function renderConsolidatedAccountSettings(){
         '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
       '</div>'+
       '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'</div>'+
-      '<div style="border-top:1px solid var(--line);padding-top:12px;"><div style="font-weight:500;font-size:13px;margin-bottom:6px;">Support VersaX CS</div><div style="font-size:12.5px;color:var(--ink-soft);"><span class="mono" id="supportAcctNo" style="color:var(--ink);">'+esc(SUPPORT_ACCOUNT_NO)+'</span></div><button class="btn ghost sm" style="margin-top:8px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy</button></div>'+
-    '</div>'+
-    
-    '<div class="card" style="margin-top:16px;border-color:var(--rust);">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;color:var(--rust);">Reset app</div>'+
-      '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Erases everything</span>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn ghost sm" data-action="export-data">'+icon("download",14)+' Export first</button>'+
-        '<button class="btn rust sm" data-action="reset-app-data">'+icon("trash",14)+' Reset app</button>'+
+      '<div style="border-top:1px solid var(--line);padding-top:12px;">'+
+        '<div style="font-weight:500;font-size:13px;margin-bottom:10px;">Support VersaX CS — bank transfer</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Bank name</div>'+
+        '<div style="font-size:13px;color:var(--ink);margin-bottom:10px;">'+esc(SUPPORT_BANK)+'</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Account name</div>'+
+        '<div style="font-size:13px;color:var(--ink);margin-bottom:10px;">'+esc(SUPPORT_ACCOUNT_NAME)+'</div>'+
+        '<div style="font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px;">Account number</div>'+
+        '<div style="font-size:13px;color:var(--ink);"><span class="mono" id="supportAcctNo">'+esc(SUPPORT_ACCOUNT_NO)+'</span></div>'+
+        '<button class="btn ghost sm" style="margin-top:10px;" data-action="copy-text" data-value="'+esc(SUPPORT_ACCOUNT_NO)+'" data-label="supportAcctCopyBtn" id="supportAcctCopyBtn">'+icon("check",13)+' Copy account number</button>'+
       '</div>'+
     '</div>'
+
   );
 }
 
@@ -3274,6 +3394,7 @@ function renderModal(){
   if(state.modal.type==="contact-dev") return renderContactDevModal();
   if(state.modal.type==="upgrade-access") return renderUpgradeAccessModal();
   if(state.modal.type==="import-license") return renderImportLicenseModal();
+  if(state.modal.type==="change-password") return renderChangePasswordModal();
   if(state.modal.type==="license-details") return renderLicenseDetailsModal();
   if(state.modal.type==="policy") return renderPolicyModal();
   if(state.modal.type==="catalogue-manager") return modalShell("Manage catalogue", renderCatalogueManager(), "full");
@@ -3427,6 +3548,19 @@ function renderImportLicenseModal(){
   );
 }
 
+function renderChangePasswordModal(){
+  const pf = state.passwordForm || {};
+  return modalShell("Change password",
+    '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;">Choose a new password for <strong style="color:var(--ink);">'+esc((state.account&&state.account.email)||"")+'</strong>. Your access key stays the same, but your license document and account backup will need to be re-downloaded after this change.</div>'+
+    (state.passwordChangeError ? '<div style="background:var(--rust-soft);color:var(--rust);padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:12px;">'+esc(state.passwordChangeError)+'</div>' : '')+
+    '<div style="margin-bottom:12px;"><label>New password</label><input type="password" data-bind="passwordForm.newPassword" value="'+esc(pf.newPassword||"")+'" placeholder="At least 6 characters"></div>'+
+    '<div style="margin-bottom:14px;"><label>Confirm new password</label><input type="password" data-bind="passwordForm.confirmPassword" value="'+esc(pf.confirmPassword||"")+'" placeholder="Re-enter new password"></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn gold" style="flex:1;min-width:120px;justify-content:center;" data-action="save-new-password">'+icon("check",15)+' Save new password</button>'+
+      '<button class="btn ghost" style="flex:1;min-width:120px;justify-content:center;" data-action="close-modal">Cancel</button>'+
+    '</div>'
+  );
+}
 function renderLicenseDetailsModal(){
   if(!state.account || !state.auth) {
     return modalShell("No Account", 
@@ -3567,6 +3701,7 @@ function renderOrderModal(){
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Share estimate</span>'+
           '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="quote" title="Preview estimate" aria-label="Preview estimate">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="quote" title="Share estimate via WhatsApp" aria-label="Share estimate">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="quote" title="Download estimate image" aria-label="Download estimate">'+icon("download",15)+'</button>'+
           '</span>'+
@@ -3579,12 +3714,14 @@ function renderOrderModal(){
       '<div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Invoice</span>'+
           '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="invoice" title="Preview invoice" aria-label="Preview invoice">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="invoice" title="Share invoice via WhatsApp" aria-label="Share invoice">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="invoice" title="Download invoice image" aria-label="Download invoice">'+icon("download",15)+'</button>'+
           '</span>'+
         '</div>'+
         '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Receipt</span>'+
           '<span style="display:flex;gap:6px;">'+
+            '<button class="iconbtn" data-action="preview-invoice-image" data-kind="receipt" title="Preview receipt" aria-label="Preview receipt">'+icon("eye",15)+'</button>'+
             '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-invoice-image" data-kind="receipt" title="Share receipt via WhatsApp" aria-label="Share receipt">'+icon("send",15)+'</button>'+
             '<button class="iconbtn" data-action="download-invoice-image" data-kind="receipt" title="Download receipt image" aria-label="Download receipt">'+icon("download",15)+'</button>'+
           '</span>'+
@@ -3592,6 +3729,7 @@ function renderOrderModal(){
         (bal>0 ?
           '<div class="rowline"><span style="font-size:13.5px;font-weight:500;">Payment reminder</span>'+
             '<span style="display:flex;gap:6px;">'+
+              '<button class="iconbtn" data-action="preview-reminder-image" title="Preview payment reminder" aria-label="Preview payment reminder">'+icon("eye",15)+'</button>'+
               '<button class="iconbtn" style="background:#3fa858;border-color:#3fa858;color:#fff;" data-action="share-reminder-image" title="Send payment reminder via WhatsApp" aria-label="Send payment reminder">'+icon("send",15)+'</button>'+
               '<button class="iconbtn" data-action="download-reminder-image" title="Download payment reminder image" aria-label="Download payment reminder">'+icon("download",15)+'</button>'+
             '</span>'+
@@ -4152,7 +4290,7 @@ function renderAuthView(){
     '<div style="margin-bottom:14px;"><label>Password</label><input type="password" data-bind="authForm.password" value="'+esc(f.password||"")+'" placeholder="Password"></div>'+
     '<button class="btn" style="width:100%;justify-content:center;" data-action="sign-in">'+icon("check",15)+' Sign in</button>'+
     (supportsWebAuthn() && hasBiometricForAccount() ?
-      '<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:10px;" data-action="biometric-sign-in">'+icon("fingerprint",16)+' Use fingerprint</button>'
+      '<button type="button" class="btn ghost" style="width:100%;justify-content:center;margin-top:10px;" data-action="biometric-sign-in"'+(state.biometricWaiting?' disabled':'')+'>'+icon("fingerprint",16)+' '+(state.biometricWaiting?"Waiting for fingerprint…":"Use fingerprint")+'</button>'
       : '')+
     (!state.account ? (
       '<div style="margin-top:16px;padding:12px;background:var(--surface);border:1px dashed var(--line);border-radius:10px;font-size:11.5px;color:var(--ink-soft);text-align:center;">'+
@@ -4755,6 +4893,11 @@ document.addEventListener("click", (e) => {
       state.activeCategoryId = state.catalogue.categories[0] ? state.catalogue.categories[0].id : null;
       persistCatalogue(); render();
     }}); break;
+    case "preview-invoice-image": {
+      const o = state.modal.draft; const client = findClient(o.clientId); const kind = el.getAttribute("data-kind")||"invoice";
+      previewInvoiceImage(o, client, kind);
+      break;
+    }
     case "share-invoice-image": {
       const o = state.modal.draft; const client = findClient(o.clientId); const kind = el.getAttribute("data-kind")||"invoice";
       shareInvoiceImage(o, client, kind, "share");
@@ -4770,6 +4913,12 @@ document.addEventListener("click", (e) => {
       const client = findClient(o.clientId);
       const bal = orderTotal(o) - orderPaid(o);
       shareReminderImage(o, client, bal, "share");
+      break;
+    }
+    case "preview-reminder-image": {
+      const o = state.modal.draft; const client = findClient(o.clientId);
+      const bal = orderTotal(o) - orderPaid(o);
+      previewReminderImage(o, client, bal);
       break;
     }
     case "share-reminder-image": {
@@ -5310,6 +5459,54 @@ document.addEventListener("click", (e) => {
     case "download-license-document":
       downloadLicenseDocument();
       break;
+    case "download-business-card":
+      downloadBusinessCard();
+      break;
+    case "download-contact-card":
+      downloadContactCard();
+      break;
+    case "generate-account-qr":
+      generateAccountQr();
+      break;
+    case "download-qr-code":
+      downloadQrCode();
+      break;
+    case "open-change-password-modal":
+      state.modal = { type:"change-password" };
+      state.passwordForm = { newPassword:"", confirmPassword:"" };
+      state.passwordChangeError = null;
+      pushNav();
+      render();
+      break;
+    case "save-new-password": {
+      const pf = state.passwordForm || {};
+      const newPassword = (pf.newPassword||"").trim();
+      const confirmPassword = (pf.confirmPassword||"").trim();
+      if(newPassword.length < 6){
+        state.passwordChangeError = "Password must be at least 6 characters.";
+        render();
+        break;
+      }
+      if(newPassword !== confirmPassword){
+        state.passwordChangeError = "Passwords don't match.";
+        render();
+        break;
+      }
+      state.account.password = newPassword;
+      state.auth.keyHash = simpleHash(state.account.email.toLowerCase() + newPassword);
+      persistAccount(); persistAuth();
+      state.passwordForm = null;
+      state.passwordChangeError = null;
+      closeModal();
+      showToast("Password changed successfully", "success");
+      askConfirm({
+        title: "Keep your backups in sync",
+        body: "Your license document and account backup were generated with your old password. Download updated copies now?",
+        confirmLabel: "Download both", cancelLabel: "Later",
+        onConfirm: () => { downloadLicenseDocument(); exportEverything(); }
+      });
+      break;
+    }
     case "view-license-modal":
       state.modal = { type: "license-details" };
       render();
@@ -5424,6 +5621,53 @@ function downloadCredentialFile(baseName, _value, contents){
   a.href = url; a.download = baseName+"-"+(state.account.email||"account")+"-"+stamp+".txt";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function downloadContactCard(){
+  const vcard = buildBusinessVCard(state.business);
+  const blob = new Blob([vcard], {type:"text/vcard;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = safeFileSlug(state.business.name)+"-contact.vcf";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function downloadBusinessCard(){
+  const el = document.getElementById("bizCardCanvas");
+  if(!el || typeof html2canvas === "undefined"){ showToast("Couldn't generate the business card image", "error"); return; }
+  html2canvas(el, {backgroundColor:null, scale:3}).then(canvas => {
+    canvas.toBlob(blob => {
+      if(!blob){ showToast("Couldn't generate the business card image", "error"); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = safeFileSlug(state.business.name)+"-card.png";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+  }).catch(() => { showToast("Couldn't generate the business card image", "error"); });
+}
+
+function generateAccountQr(){
+  if(typeof qrcode === "undefined"){ showToast("QR code library not available", "error"); return; }
+  try{
+    const text = buildBusinessVCard(state.business);
+    const qr = qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    state.accountQrDataUrl = qr.createDataURL(6, 8);
+    render();
+  }catch(e){
+    console.error("QR generation error:", e);
+    showToast("Couldn't generate the QR code", "error");
+  }
+}
+
+function downloadQrCode(){
+  if(!state.accountQrDataUrl){ showToast("Generate the QR code first", "error"); return; }
+  const a = document.createElement("a");
+  a.href = state.accountQrDataUrl; a.download = safeFileSlug(state.business.name)+"-qr.png";
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 function exportWithLicense(){
