@@ -257,7 +257,7 @@
   .splash-logo{
     width:96px; height:96px; border-radius:26px; object-fit:cover;
     box-shadow:0 10px 28px rgba(0,0,0,.14);
-    background:var(--primary);
+    background:#FFFFFF;
     opacity:0;
   }
   .splash-logo.loaded{
@@ -3646,12 +3646,12 @@ function renderConsolidatedAccountSettings(){
         '<div><label>Currency symbol</label><input data-bind="business.currency" value="'+esc(b.currency)+'"></div>'+
         '<div style="grid-column:1/-1;"><label>Address</label><input data-bind="business.address" value="'+esc(b.address)+'"></div>'+
         '<div><label>Registration number</label><input data-bind="business.regNumber" value="'+esc(b.regNumber)+'" placeholder="e.g. RC 1234567"></div>'+
-        '<div><label>Business type</label><select data-action="switch-business-category">'+
+        '<div><label>Change business type</label><select data-action="switch-business-category">'+
           CATEGORY_ORDER.filter(k=>k!=="admin").map(key=>{
             const c = CATEGORY_CONFIG[key];
             return '<option value="'+key+'" '+(state.businessCategory===key?'selected':'')+'>'+esc(c.label)+'</option>';
           }).join("")+
-        '</select><div style="font-size:10.5px;color:var(--ink-soft);margin-top:4px;">Picked the wrong type at setup? Switch here anytime — all your '+nounFor("clientPlural").toLowerCase()+', '+nounFor("recordPlural").toLowerCase()+' and '+nounFor("catalogue").toLowerCase()+' stay exactly as they are.</div></div>'+
+        '</select></div>'+
       '</div>'+
     '</div>'+
     
@@ -6618,21 +6618,27 @@ async function shareEverything(){
     const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"text/plain"});
     const file = new File([blob], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"text/plain"});
     
-    // Share using native OS share sheet
-    if(!navigator.share || (navigator.canShare && !navigator.canShare({files:[file]}))){
+    if(!navigator.share){
       exportEverything();
       showToast("Sharing isn't available here — downloaded the backup instead", "info");
       return;
     }
     
-    navigator.share({
-      files:[file],
-      title:"BizDeck account backup",
-      text:"Complete BizDeck account backup including data, clients, orders, and credentials"
-    }).catch((e)=>{
-      if(e && e.name==="AbortError") return;
+    // Attempt the native share sheet directly rather than pre-checking
+    // navigator.canShare(), which some browsers report as unsupported for
+    // files even when the actual share() call would succeed. Only fall
+    // back to a download if the share attempt itself fails.
+    try{
+      await navigator.share({
+        files:[file],
+        title:"BizDeck account backup",
+        text:"Complete BizDeck account backup including data, clients, orders, and credentials"
+      });
+    }catch(e){
+      if(e && e.name==="AbortError") return; // user cancelled the share sheet
       exportEverything();
-    });
+      showToast("Sharing isn't available here — downloaded the backup instead", "info");
+    }
   } catch(e) {
     console.error("Share error:", e);
     exportEverything();
