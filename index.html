@@ -3996,17 +3996,6 @@ function renderInvoiceHelpModal(){
 function renderPolicyModal(){
   return modalShell("Data & privacy policy", policyBodyHtml());
 }
-function renderContactDevModal(){
-  return modalShell("Contact the developer",
-    '<div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Need help signing up, or spotted an issue? Reach out directly.</div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-      '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I need help with BizDeck: ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
-      '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
-      '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
-    '</div>'+
-    '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'<br>'+esc(DEV_EMAIL)+' · '+esc(DEV_PHONE)+'</div>'
-  );
-}
 
 function renderUpgradeAccessModal(){
   const upgradeForm = state.upgradeForm || { key:"" };
@@ -4146,12 +4135,27 @@ function renderLicenseDetailsModal(){
 }
 
 function renderContactDevModal(){
+  const isSignup = state.modal && state.modal.context==="signup";
+  const f = state.authForm || {};
+  let waMsg = "Hi "+DEV_STUDIO+", I need help with BizDeck: ";
+  let mailBody = "";
+  if(isSignup && (f.name || f.email || f.key)){
+    const lines = ["Hi "+DEV_STUDIO+", I need help signing up for BizDeck.", ""];
+    if(f.name) lines.push("Business name: "+f.name);
+    if(f.email) lines.push("Email: "+f.email);
+    if(f.key) lines.push("Access key: "+f.key);
+    waMsg = lines.join("\n");
+    mailBody = "?body="+encodeURIComponent(lines.join("\n"))+"&subject="+encodeURIComponent("BizDeck signup help");
+  }
   return modalShell("Contact the developer",
     '<div style="font-size:13px;color:var(--ink-soft);margin-bottom:14px;">Need help signing up, or spotted an issue? Reach out directly.</div>'+
+    (isSignup && (f.name || f.email || f.key) ?
+      '<div style="font-size:11.5px;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;">Your account details will be included so we know who\'s reaching out'+(f.name?': <strong style="color:var(--ink);">'+esc(f.name)+'</strong>':'')+(f.email?' ('+esc(f.email)+')':'')+'.</div>'
+      : '')+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">'+
-      '<a class="btn wa sm" href="'+waLink(DEV_PHONE, "Hi "+DEV_STUDIO+", I need help with BizDeck: ")+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
+      '<a class="btn wa sm" href="'+waLink(DEV_PHONE, waMsg)+'" target="_blank" rel="noopener">'+icon("chat",14)+' WhatsApp</a>'+
       '<a class="btn ghost sm" href="tel:'+DEV_PHONE.replace(/[^0-9+]/g,"")+'">'+icon("phone",14)+' Call</a>'+
-      '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+'">'+icon("mail",14)+' Email</a>'+
+      '<a class="btn ghost sm" href="mailto:'+DEV_EMAIL+mailBody+'">'+icon("mail",14)+' Email</a>'+
     '</div>'+
     '<div style="font-size:11.5px;color:var(--ink-soft);line-height:1.6;">'+esc(DEV_STUDIO)+' — developed by '+esc(DEV_NAME)+'<br>'+esc(DEV_EMAIL)+' · '+esc(DEV_PHONE)+'</div>'
   );
@@ -4969,7 +4973,7 @@ function renderAuthView(){
     '<div style="text-align:center;margin-top:10px;font-size:12.5px;color:var(--ink-soft);">Already have an account? '+
       '<span data-action="toggle-auth-mode" style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Sign in</span></div>'+
     '<div style="text-align:center;margin-top:6px;font-size:12.5px;color:var(--ink-soft);">'+
-      '<span data-action="open-contact-dev-modal" style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Contact developer</span></div>';
+      '<span data-action="open-contact-dev-modal" data-context="signup" style="color:var(--primary-text);font-weight:600;cursor:pointer;text-decoration:underline;">Contact developer</span></div>';
 
   return (
     '<div id="authScroll" style="position:fixed;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;align-items:center;justify-content:center;padding:30px 16px;box-sizing:border-box;background:var(--bg);">'+
@@ -5133,7 +5137,8 @@ async function shareCatalogueItem(id){
     '<div style="font-family:IBM Plex Mono,monospace;font-weight:700;font-size:24px;margin-bottom:8px;">'+money(it.price,business.currency)+'</div>'+
     '<div style="font-size:16px;font-weight:600;margin-bottom:8px;">'+esc(it.name)+'</div>'+
     (it.description ? '<div style="font-size:13px;color:#645E50;margin-bottom:14px;white-space:pre-wrap;">'+esc(it.description)+'</div>' : '')+
-    (business.name ? '<div style="font-size:12px;color:#645E50;border-top:1px solid #D6CDB6;padding-top:10px;">'+esc(business.name)+'</div>' : '');
+    (business.name ? '<div style="font-size:12px;color:#645E50;border-top:1px solid #D6CDB6;padding-top:10px;">'+esc(business.name)+'</div>' : '')+
+    '<div style="font-size:10.5px;color:#645E50;margin-top:'+(business.name?'4px':'10px')+';'+(business.name?'':'border-top:1px solid #D6CDB6;padding-top:10px;')+'">Powered by <strong>BizDeck</strong></div>';
   
   document.body.appendChild(sharePreview);
   
@@ -5154,13 +5159,13 @@ async function shareCatalogueItem(id){
       }
       
       // Fallback: share text with WhatsApp link
-      const text = "*"+it.name+"*\n"+(it.description?it.description+"\n":"")+money(it.price,business.currency)+(business.name?"\n\n"+business.name:"");
+      const text = "*"+it.name+"*\n"+(it.description?it.description+"\n":"")+money(it.price,business.currency)+(business.name?"\n\n"+business.name:"")+"\n\nPowered by BizDeck";
       window.open(waLink("", text), "_blank", "noreferrer");
     }, "image/jpeg", 0.9);
   }catch(e){
     document.body.removeChild(sharePreview);
     // Fallback: share text with WhatsApp link
-    const text = "*"+it.name+"*\n"+(it.description?it.description+"\n":"")+money(it.price,business.currency)+(business.name?"\n\n"+business.name:"");
+    const text = "*"+it.name+"*\n"+(it.description?it.description+"\n":"")+money(it.price,business.currency)+(business.name?"\n\n"+business.name:"")+"\n\nPowered by BizDeck";
     window.open(waLink("", text), "_blank", "noreferrer");
   }
 }
@@ -6180,7 +6185,7 @@ document.addEventListener("click", (e) => {
     case "connect-cloud-folder": connectCloudFolder(); break;
     case "backup-to-cloud-now": backupToCloudFolder(false); break;
     case "disconnect-cloud-folder": disconnectCloudFolder(); break;
-    case "open-contact-dev-modal": state.modal = { type:"contact-dev" }; pushNav(); render(); break;
+    case "open-contact-dev-modal": state.modal = { type:"contact-dev", context: el.getAttribute("data-context")||"" }; pushNav(); render(); break;
     case "open-upgrade-modal": 
       state.modal = { type:"upgrade-access" };
       state.upgradeForm = { key:"" };
@@ -6587,17 +6592,11 @@ function shareBackupWithLicense(){
   });
   const stamp = new Date().toISOString().slice(0,10);
   const file = new File([JSON.stringify(backup, null, 2)], "bizdeck-account-"+state.account.email+"-"+stamp+".bizdeck", {type:"application/json"});
-  if(!navigator.share){
-    exportWithLicense();
-    showToast("Sharing isn't available here — downloaded the backup instead", "info");
-    return;
-  }
-  navigator.share({ files:[file], title:"BizDeck account backup" }).catch((e)=>{
-    if(e && e.name==="AbortError") return; // user cancelled the share sheet
-    console.error("Share error:", e);
-    exportWithLicense();
-    showToast("Sharing isn't available here — downloaded the backup instead", "info");
-  });
+  // Same share mechanism as the catalogue/portfolio Share buttons
+  // (shareImageFile) — canShare() is checked the same way here, and the
+  // fallback is identical: download the file, then hand off to WhatsApp
+  // for a manual attach if the OS share sheet isn't available.
+  shareImageFile(file, "BizDeck account backup — "+(state.account.name||""), "");
 }
 
 // Share everything: uses native OS share sheet like order sharing (JSON format)
