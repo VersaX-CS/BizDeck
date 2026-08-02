@@ -6858,7 +6858,7 @@ async function disconnectCloudFolder(){
 // thrown so the caller can report it.
 async function writeFileToDirectory(dirHandle, filename, contents){
   let lastErr;
-  for(let attempt=0; attempt<3; attempt++){
+  for(let attempt=0; attempt<4; attempt++){
     try{
       const fh = await dirHandle.getFileHandle(filename, { create:true });
       const w = await fh.createWritable();
@@ -6867,7 +6867,7 @@ async function writeFileToDirectory(dirHandle, filename, contents){
       return;
     }catch(err){
       lastErr = err;
-      if(attempt < 2) await new Promise(r => setTimeout(r, 450 * (attempt+1)));
+      if(attempt < 3) await new Promise(r => setTimeout(r, 500 * (attempt+1)));
     }
   }
   try{ await dirHandle.removeEntry(filename); }catch(e){}
@@ -6924,10 +6924,22 @@ async function backupToCloudFolder(silent){
     const json = JSON.stringify(payload, null, 2);
     const stamp = new Date().toISOString().replace(/[:.]/g,"-");
 
+    // This is the real backup — it must succeed, or the whole operation
+    // is reported as failed.
     await writeFileToDirectory(handle, "bizdeck-backup-"+stamp+".json", json);
 
-    // Also keep one fixed, always-current copy for easy restoring.
-    await writeFileToDirectory(handle, "bizdeck-backup-latest.json", json);
+    // The "latest" copy is just a convenience (so the most recent backup
+    // is easy to find without sorting timestamps). It's overwritten on
+    // every single backup, which makes it the file most likely to collide
+    // with the cloud app (Drive/OneDrive) mid-sync. Treat it as
+    // best-effort: log and move on if it fails, rather than reporting the
+    // whole backup as failed when the real timestamped file above already
+    // saved successfully.
+    try{
+      await writeFileToDirectory(handle, "bizdeck-backup-latest.json", json);
+    }catch(latestErr){
+      console.warn("Couldn't update bizdeck-backup-latest.json (non-fatal):", latestErr);
+    }
 
     await pruneCloudBackups(handle);
 
