@@ -372,6 +372,7 @@ const ICONS = {
   ledger:'<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H18v18H6.5A1.5 1.5 0 0 1 5 19.5v-15z"/><path d="M8 3v18"/><path d="M11 8h5M11 11.5h5"/>',
   cloud:'<path d="M7 18a4.5 4.5 0 0 1-.5-8.98A6 6 0 0 1 18 8.5a4 4 0 0 1-1 7.5H7z"/><path d="M12 12v6M9.5 15.5L12 18l2.5-2.5"/>',
   home:'<path d="M4 11l8-7 8 7"/><path d="M6 9.5V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5"/><path d="M10 21v-6h4v6"/>',
+  sliders:'<path d="M4 6h9M17 6h3M4 12h3M9 12h11M4 18h13M19 18h1"/><circle cx="14" cy="6" r="2"/><circle cx="7" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
 };
 function icon(name,size){ size=size||16; return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="'+size+'" height="'+size+'" aria-hidden="true">'+(ICONS[name]||'')+'</svg>'; }
 
@@ -2268,6 +2269,7 @@ function renderCatalogue(){
         '<button class="btn wa sm" data-action="share-pricelist-image">'+icon("send",14)+' Share</button>'+
         '<button class="btn ghost sm" data-action="download-pricelist-image">'+icon("download",14)+' Download</button>'+
       '</div>'+
+      '<button class="btn ghost" style="width:100%;justify-content:center;margin-bottom:14px;" data-action="open-catalogue-manager" data-tour-target="manage-catalogue" title="Manage categories, items and photos">'+icon("sliders",15)+' Manage catalogue</button>'+
     '</div>'+
     '<div id="catalogueItemsWrap">'+ catalogueResultsHtml() +'</div>'
   );
@@ -3171,12 +3173,6 @@ function renderConsolidatedAccountSettings(){
       '</div>'+
     '</div>'+
     
-    '<div class="card" style="margin-bottom:16px;" data-tour-target="manage-catalogue">'+
-      '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Manage catalogue</div>'+
-      '<span class="pill" style="background:var(--surface);color:var(--ink-soft);margin-bottom:12px;">Categories, items, photos</span>'+
-      renderCatalogueManager()+
-    '</div>'+
-    
     '<div class="card" style="margin-bottom:16px;" data-tour-target="backup-transfer">'+
       '<div class="disp" style="font-weight:600;font-size:14.5px;margin-bottom:4px;">Backup & transfer</div>'+
       '<span class="pill" style="background:var(--rust-soft);color:var(--rust);margin-bottom:12px;">⚠️ Local data only — export regularly</span>'+
@@ -3280,6 +3276,7 @@ function renderModal(){
   if(state.modal.type==="import-license") return renderImportLicenseModal();
   if(state.modal.type==="license-details") return renderLicenseDetailsModal();
   if(state.modal.type==="policy") return renderPolicyModal();
+  if(state.modal.type==="catalogue-manager") return modalShell("Manage catalogue", renderCatalogueManager(), "full");
   return "";
 }
 function modalShell(title, bodyHtml, variant){
@@ -4438,6 +4435,9 @@ function getTourSteps(){
     { tab:"catalogue", getTarget:()=>document.querySelector('#content [data-action="share-pricelist-image"]'),
       title:"Share your price list",
       body:"Send your whole "+catalogueWord+" as a neat image straight to WhatsApp, or download it to share anywhere." },
+    { tab:"catalogue", getTarget:()=>document.querySelector('[data-tour-target="manage-catalogue"]'),
+      title:"Manage "+catalogueWord,
+      body:"Tap here to build what shows up in the "+nounFor("catalogue")+" tab — add categories, upload gallery photos, and create priced items." },
     { tab:"account", view:"account", getTarget:()=>document.querySelector('[data-tour-target="business-profile"]'),
       title:"Business profile",
       body:"Your business name, logo, phone, address and registration number — used on every invoice, receipt and shared price list." },
@@ -4447,9 +4447,6 @@ function getTourSteps(){
     { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="category-gallery"]'),
       title:"Photo gallery",
       body:"Upload photos for each category — "+clientsWord+" see these when browsing your "+catalogueWord+". Tap a photo to view it full-screen." },
-    { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="manage-catalogue"]'),
-      title:"Manage "+catalogueWord,
-      body:"This is where you build what shows up in the "+nounFor("catalogue")+" tab — add categories, upload gallery photos, and create priced items." },
     { tab:"account", view:"general", getTarget:()=>document.querySelector('[data-tour-target="appearance"]'),
       title:"Appearance",
       body:"Pick a color theme for the whole app, or tap the palette swatch to build your own personalized colours from scratch." },
@@ -4610,6 +4607,7 @@ document.addEventListener("click", (e) => {
     case "open-order-modal-new-for-client": openOrderModal(null, id); break;
     case "open-order-modal": openOrderModal(findOrder(id)); break;
     case "open-notifications": state.modal = { type:"notifications" }; pushNav(); render(); break;
+    case "open-catalogue-manager": state.modal = { type:"catalogue-manager" }; pushNav(); render(); break;
     case "open-policy-modal": state.modal = { type:"policy" }; pushNav(); render(); break;
     case "open-global-search": state.modal = { type:"global-search" }; state.globalSearchQ = ""; pushNav(); render();
       setTimeout(()=>{ const el = document.getElementById("globalSearchInput"); if(el) el.focus(); }, 30);
@@ -4788,8 +4786,8 @@ document.addEventListener("click", (e) => {
     }
     case "share-pricelist-image": sharePriceListImage("share"); break;
     case "download-pricelist-image": sharePriceListImage("download"); break;
-    case "open-catitem-modal-new": openCatItemModal(null, el.getAttribute("data-cat")); break;
-    case "open-catitem-modal": openCatItemModal(findCatItem(id)); break;
+    case "open-catitem-modal-new": if(state.modal && state.modal.type==="catalogue-manager") state.pendingModal = state.modal; openCatItemModal(null, el.getAttribute("data-cat")); break;
+    case "open-catitem-modal": if(state.modal && state.modal.type==="catalogue-manager") state.pendingModal = state.modal; openCatItemModal(findCatItem(id)); break;
     case "view-catitem": openCatItemView(id); break;
     case "share-catitem-whatsapp": shareCatalogueItem(id); break;
     case "add-catitem-to-new-order": {
