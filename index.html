@@ -1122,14 +1122,23 @@ function StatCard({ label, value, icon: Icon, tone, sub }) {
 function EmptyState({ text }) {
   return <div className="empty-state">{text}</div>;
 }
-function SectionHeader({ eyebrow, title, action }) {
+function SectionHeader({ eyebrow, title, action, onTour }) {
   return (
     <div className="section-header">
       <div className="section-header-top">
         <div className="eyebrow">{eyebrow}</div>
         <h2 className="kb-display">{title}</h2>
       </div>
-      {action && <div className="section-header-actions">{action}</div>}
+      {(action || onTour) && (
+        <div className="section-header-actions">
+          {action}
+          {onTour && (
+            <button className="btn btn-ghost btn-small section-header-tour-btn" onClick={onTour} title="Quick tour of this screen">
+              <Compass size={14} /> Quick tour
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2171,7 +2180,7 @@ function ReminderDocModal({ reminderDoc, settings, fmt, onClose, queueRemaining 
     </div>
   );
 }
-function TabStatementModal({ tab, contact, settings, fmt, onClose, shareImageToWhatsApp }) {
+function TabStatementModal({ tab, contact, settings, fmt, onClose, shareImageToWhatsApp, onEditEntry, onDeleteEntry }) {
   useEscClose(onClose);
   const sortedEntries = [...(tab.entries || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
   let running = 0;
@@ -2238,7 +2247,15 @@ function TabStatementModal({ tab, contact, settings, fmt, onClose, shareImageToW
                 {rows.map((r) => (
                   <div key={r.id} className="doc-line">
                     <span>{new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} — {r.type === 'borrow' ? 'Borrowed' : 'Paid back'}{r.note ? ` (${r.note})` : ''}</span>
-                    <span className="kb-mono">{r.type === 'borrow' ? '+' : '−'}{fmt(r.amount)} · bal {fmt(Math.abs(r.running))}</span>
+                    <span className="kb-mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      {r.type === 'borrow' ? '+' : '−'}{fmt(r.amount)} · bal {fmt(Math.abs(r.running))}
+                      {(onEditEntry || onDeleteEntry) && (
+                        <span className="tab-entry-actions" style={{ display: 'inline-flex' }}>
+                          {onEditEntry && <button className="icon-btn" onClick={() => onEditEntry(r)} title="Edit" aria-label="Edit"><Edit3 size={13} /></button>}
+                          {onDeleteEntry && <button className="icon-btn" onClick={() => onDeleteEntry(r)} title="Delete" aria-label="Delete"><Trash2 size={13} /></button>}
+                        </span>
+                      )}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -2255,6 +2272,87 @@ function TabStatementModal({ tab, contact, settings, fmt, onClose, shareImageToW
             <button className="btn btn-outline btn-small" onClick={downloadImage}><ImageIcon size={14} /> Download image</button>
             <button className="btn btn-outline btn-small" onClick={() => window.print()}><Printer size={14} /> Print / Save PDF</button>
             <button className="btn btn-ghost btn-small" onClick={() => shareImageToWhatsApp(personPhone, waText, `statement-${statementNo}.png`)}><MessageCircle size={14} /> Share image on WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shown immediately after a single IOU entry is recorded — a quick, focused
+// preview of just that entry (not the whole history), so the person can
+// double check it, fix it, or send proof of it straight away.
+function TabEntryReceiptModal({ tab, entry, contact, settings, fmt, onClose, onEdit, onDelete, shareImageToWhatsApp }) {
+  useEscClose(onClose);
+  const personName = contact ? contact.name : 'Unknown contact';
+  const personPhone = contact ? contact.phone : '';
+  const balance = tabBalance(tab);
+  const balanceLabel = balance > 0 ? `${personName} owes` : balance < 0 ? 'You owe' : 'Balance is';
+  const receiptNo = entry.id.slice(0, 8).toUpperCase();
+  const issuedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const entryDate = new Date(entry.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const waText = [
+    `*${settings.businessName}* — IOU Entry Recorded`, '',
+    `Receipt No: ${receiptNo}`,
+    `For: ${personName}`,
+    `${entry.type === 'borrow' ? 'Borrowed' : 'Paid back'}: ${fmt(entry.amount)}`,
+    entry.note ? `Note: ${entry.note}` : null,
+    `Date: ${entryDate}`,
+    `${balanceLabel} ${fmt(Math.abs(balance))}`,
+  ].filter(Boolean).join('\n');
+
+  const downloadImage = () => {
+    const node = document.getElementById('entry-receipt-print-area');
+    if (!node || !window.html2canvas) return;
+    window.html2canvas(node, { backgroundColor: '#F7F3EA', scale: 16 }).then((canvas) => {
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url; a.download = `iou-entry-${receiptNo}.png`; a.click();
+    });
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card receipt-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h3 className="kb-display">Entry recorded</h3>
+          <button className="icon-btn" onClick={onClose} title="Close" aria-label="Close"><X size={18} /></button>
+        </div>
+        <div className="modal-body">
+          <div id="entry-receipt-print-area" className="receipt-sheet">
+            <DocHeader settings={settings} />
+            <div className="doc-title-row">
+              <div>
+                <div className="doc-title">IOU Entry Receipt</div>
+                <div className="doc-title-meta">{receiptNo} · {issuedOn}</div>
+              </div>
+              <div>
+                <div className="doc-billed-label">For</div>
+                <div className="doc-billed-name">{personName}</div>
+              </div>
+            </div>
+            <div>
+              {personPhone && <div className="doc-line"><span>Phone</span><span className="kb-mono">{personPhone}</span></div>}
+              <div className="doc-line">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {entry.type === 'borrow' ? <ArrowDownRight size={14} className="tab-balance-owed" /> : <ArrowUpRight size={14} className="tab-balance-clear" />}
+                  {entry.type === 'borrow' ? 'Borrowed' : 'Paid back'}{entry.note ? ` (${entry.note})` : ''} — {entryDate}
+                </span>
+                <span className="kb-mono">{entry.type === 'borrow' ? '+' : '−'}{fmt(entry.amount)}</span>
+              </div>
+            </div>
+            <div className="doc-totals">
+              <div className="doc-total-row balance"><span>{balanceLabel}</span><span className="kb-mono">{fmt(Math.abs(balance))}</span></div>
+            </div>
+            <DocSignature settings={settings} />
+            <DocFooter settings={settings} />
+          </div>
+          <div className="receipt-actions">
+            <button className="btn btn-outline btn-small" onClick={onEdit}><Edit3 size={14} /> Edit</button>
+            {onDelete && <button className="btn btn-outline btn-small" onClick={onDelete}><Trash2 size={14} /> Delete</button>}
+            <button className="btn btn-outline btn-small" onClick={downloadImage}><ImageIcon size={14} /> Download image</button>
+            <button className="btn btn-ghost btn-small" onClick={() => shareImageToWhatsApp(personPhone, waText, `iou-entry-${receiptNo}.png`)}><Send size={14} /> Send receipt</button>
           </div>
         </div>
       </div>
@@ -3560,6 +3658,7 @@ function App() {
   const [tourStep, setTourStep] = useState(null);
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [tabStatementDoc, setTabStatementDoc] = useState(null);
+  const [entryPreviewDoc, setEntryPreviewDoc] = useState(null);
   const [clientStatementDoc, setClientStatementDoc] = useState(null);
   const [contributorStatementDoc, setContributorStatementDoc] = useState(null);
   const [invoiceSummaryDoc, setInvoiceSummaryDoc] = useState(null);
@@ -4964,8 +5063,12 @@ function App() {
   };
   const addTabEntry = (tabId, entry) => {
     if (guardWrite()) return;
-    setLoanTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, entries: [...t.entries, { id: uid(), ...entry }] } : t));
+    // Every entry is written to the ledger the moment it's made — never batched
+    // or regrouped — so the running balance stays accountable entry-by-entry.
+    const newEntry = { id: uid(), ...entry };
+    setLoanTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, entries: [...t.entries, newEntry] } : t));
     flash(entry.type === 'borrow' ? 'Borrowing added to the IOU.' : 'Payment added to the IOU.');
+    setEntryPreviewDoc({ tabId, entryId: newEntry.id });
   };
   const updateTabEntry = (tabId, entryId, changes) => {
     if (guardWrite()) return;
@@ -5873,7 +5976,7 @@ function App() {
   /* ============================== tab renders ============================== */
   const renderThriftOverview = () => (
     <>
-      <SectionHeader eyebrow="Thrift" title="Today's thrift position" />
+      <SectionHeader eyebrow="Thrift" title="Today's thrift position" onTour={() => setTourStep(1)} />
       <div className="stat-grid">
         <StatCard label="Total thrift collected" value={fmt(totalCollected)} icon={PiggyBank} tone="green" sub={`${activePlansCount} plan(s) running`} />
         <StatCard label="Running savings balance" value={fmt(runningThriftBalance)} icon={Wallet} tone="steel" sub={totalWithdrawnFromThrift > 0 ? `${fmt(totalWithdrawnFromThrift)} taken out` : 'Nothing taken out yet'} />
@@ -5943,7 +6046,7 @@ function App() {
 
   const renderLoansOverview = () => (
     <>
-      <SectionHeader eyebrow="Loan tracking" title="Today's loan position" />
+      <SectionHeader eyebrow="Loan tracking" title="Today's loan position" onTour={() => setTourStep(10)} />
       <div className="stat-grid">
         <StatCard label="Owed to you (loans given)" value={fmt(totalOwedToMe)} icon={ArrowDownRight} tone="steel" sub={`${loansGiven.length} loan(s) recorded`} />
         <StatCard label="You owe (loans received)" value={fmt(totalIOwe)} icon={ArrowUpRight} tone="brick" sub={`${loansReceived.length} loan(s) recorded`} />
@@ -5993,7 +6096,7 @@ function App() {
 
   const renderPaymentsOverview = () => (
     <>
-      <SectionHeader eyebrow="Payment portal" title="Today's business payments" />
+      <SectionHeader eyebrow="Payment portal" title="Today's business payments" onTour={() => setTourStep(18)} />
       <div className="stat-grid">
         <StatCard label="Total invoiced" value={fmt(totalInvoiced)} icon={FileText} tone="steel" sub={`${invoices.length} invoice(s)`} />
         <StatCard label="Total received" value={fmt(totalReceived)} icon={Receipt} tone="green" sub={`${receipts.length} receipt(s)`} />
@@ -6053,7 +6156,7 @@ function App() {
           action={<div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-outline" onClick={triggerThriftImport}><Upload size={16} /> Import plan</button>
             <button className="btn btn-primary" data-tour="plans-new" onClick={() => openModal('newPlan', { memberIds: [], color: PLAN_COLORS[plans.length % PLAN_COLORS.length] })}><Plus size={16} /> New thrift plan</button>
-          </div>} />
+          </div>} onTour={() => setTourStep(3)} />
         <input ref={thriftFileInputRef} type="file" accept=".csv,.txt,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.pdf,application/pdf" style={{ display: 'none' }} onChange={handleThriftFileSelected} />
         {plans.length > 4 && <SearchBox placeholder="Search plans…" value={planSearch} onChange={setPlanSearch} className="loan-search" />}
 
@@ -6411,7 +6514,7 @@ function App() {
               <button className="btn btn-danger" onClick={() => deleteMembersBatch(checkedMemberIds)}><Trash2 size={16} /> Delete selected ({checkedMemberIds.length})</button>
             )}
             <button className="btn btn-primary" data-tour="contributors-new" onClick={() => openModal('newMember')}><Plus size={16} /> Add contributor</button>
-          </div>} />
+          </div>} onTour={() => setTourStep(7)} />
         <div className="contributors-shell">
           <div className="panel master-list contributors-list-panel">
             <div className="panel-kicker"><span className="panel-kicker-dot" />Contributor list</div>
@@ -6706,7 +6809,7 @@ function App() {
   const renderLoansGiven = () => (
     <>
       <SectionHeader eyebrow="Money out" title="Loans given to individuals"
-        action={<button className="btn btn-primary" data-tour="loans-given-new" onClick={() => openModal('newLoanGiven')}><Plus size={16} /> New loan</button>} />
+        action={<button className="btn btn-primary" data-tour="loans-given-new" onClick={() => openModal('newLoanGiven')}><Plus size={16} /> New loan</button>} onTour={() => setTourStep(11)} />
       {renderLoanGroups(loansGiven, 'repayments', 'borrower', addRepayment, 'Record payment', 'No loans given out yet.', loanGivenSearch, setLoanGivenSearch, deleteLoanGiven)}
     </>
   );
@@ -6714,7 +6817,7 @@ function App() {
   const renderLoansReceived = () => (
     <>
       <SectionHeader eyebrow="Money in" title="Personal loans received"
-        action={<button className="btn btn-primary" data-tour="loans-received-new" onClick={() => openModal('newLoanReceived')}><Plus size={16} /> New loan</button>} />
+        action={<button className="btn btn-primary" data-tour="loans-received-new" onClick={() => openModal('newLoanReceived')}><Plus size={16} /> New loan</button>} onTour={() => setTourStep(13)} />
       {renderLoanGroups(loansReceived, 'refunds', 'lender', addRefund, 'Record refund', 'No personal loans received yet.', loanReceivedSearch, setLoanReceivedSearch, deleteLoanReceived)}
     </>
   );
@@ -6727,7 +6830,7 @@ function App() {
     return (
       <>
         <SectionHeader eyebrow="IOUs" title="Running IOUs"
-          action={<button className="btn btn-primary" data-tour="loans-tabs-new" onClick={() => openModal('newLoanTab', { contactMode: loanContacts.length ? 'existing' : 'new' })}><Plus size={16} /> New IOU</button>} />
+          action={<button className="btn btn-primary" data-tour="loans-tabs-new" onClick={() => openModal('newLoanTab', { contactMode: loanContacts.length ? 'existing' : 'new' })}><Plus size={16} /> New IOU</button>} onTour={() => setTourStep(15)} />
         <div className="field-hint" style={{ marginBottom: 14 }}>
           Informal back-and-forth borrowing with one person — balance is just the running sum.
         </div>
@@ -6738,7 +6841,6 @@ function App() {
               const contact = loanContactById(t.contactId);
               const balance = tabBalance(t);
               const isOpen = expandedTab === t.id;
-              const sortedEntries = [...t.entries].sort((a, b) => new Date(b.date) - new Date(a.date));
               const balanceCls = balance > 0 ? 'tab-balance-owed' : balance < 0 ? 'tab-balance-owe' : 'tab-balance-clear';
               const balanceLabel = balance > 0 ? 'owes you' : balance < 0 ? 'you owe' : 'settled';
               return (
@@ -6768,25 +6870,14 @@ function App() {
                     <div className="loan-card-body">
                       {t.note && <div className="loan-note">“{t.note}”</div>}
                       <div className="panel-title" style={{ fontSize: 13, marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>Transactions</span>
-                        <button className="btn btn-outline btn-small" onClick={() => setTabStatementDoc({ tab: t, contact })}><Receipt size={13} /> Statement</button>
+                        <span>Add an entry</span>
+                        <button className="btn btn-outline btn-small" onClick={() => setTabStatementDoc({ tab: t, contact })}>
+                          <Receipt size={13} /> View summary{t.entries.length > 0 ? ` (${t.entries.length})` : ''}
+                        </button>
                       </div>
-                      {sortedEntries.length === 0 ? <EmptyState text="No entries yet — add the first borrow or payment below." /> : (
-                        <ul className="tab-entry-list">
-                          {sortedEntries.map((e) => (
-                            <li key={e.id} className={`tab-entry-row tab-entry-row-${e.type}`}>
-                              {e.type === 'borrow' ? <ArrowDownRight size={14} className="tab-balance-owed" /> : <ArrowUpRight size={14} className="tab-balance-clear" />}
-                              <span className="tab-entry-amount kb-mono">{e.type === 'borrow' ? '+' : '−'}{fmt(e.amount)}</span>
-                              <span className="tab-entry-note">{e.note || (e.type === 'borrow' ? 'Borrowed' : 'Paid back')}</span>
-                              <span className="tab-entry-date kb-mono">{new Date(e.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                              <div className="tab-entry-actions">
-                                <button className="icon-btn" onClick={() => openModal('editTabEntry', { tabId: t.id, entryId: e.id, type: e.type, amount: e.amount, date: e.date, note: e.note || '' })} title="Edit" aria-label="Edit"><Edit3 size={13} /></button>
-                                <button className="icon-btn" onClick={() => deleteTabEntry(t.id, e.id)} title="Delete" aria-label="Delete"><Trash2 size={13} /></button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <div className="field-hint" style={{ marginBottom: 10 }}>
+                        Record each borrow or payment as it happens — every entry is saved on its own, right away, so the running balance stays easy to account for. Tap “View summary” to see the full history.
+                      </div>
                       <AddTabEntryRow onAdd={(entry) => addTabEntry(t.id, entry)} />
                     </div>
                   )}
@@ -6873,7 +6964,7 @@ function App() {
             )}
             <button className="btn btn-outline" onClick={() => exportClientsCsv(filtered)}><Download size={16} /> Export CSV</button>
             <button className="btn btn-primary" data-tour="clients-new" onClick={() => openModal('newClient')}><Plus size={16} /> Add client</button>
-          </div>} />
+          </div>} onTour={() => setTourStep(19)} />
         <SearchBox className="loan-search" placeholder="Search clients…" value={clientSearch} onChange={setClientSearch} />
         {filtered.length > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 13, color: 'var(--ink-soft)' }}>
@@ -6987,29 +7078,31 @@ function App() {
     return (
       <>
         <SectionHeader eyebrow="Bill your clients" title="Invoices"
-          action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline" onClick={() => exportInvoicesCsv(filtered)}><Download size={16} /> CSV</button>
-            <button className="btn btn-outline" onClick={() => exportInvoicesXlsx(filtered)}><Download size={16} /> Excel</button>
-            <button className="btn btn-outline" onClick={() => {
-              const sortLabels = { 'date:desc': 'date (newest first)', 'date:asc': 'date (oldest first)', 'client:asc': 'client (A–Z)', 'client:desc': 'client (Z–A)', 'total:desc': 'total (highest first)', 'total:asc': 'total (lowest first)', 'status:asc': 'status' };
-              setInvoiceSummaryDoc({
-                title: 'Invoice Summary',
-                sortLabel: sortLabels[`${invoiceSort.key}:${invoiceSort.dir}`] || 'date',
-                count: filtered.length,
-                rows: filtered.map((inv) => {
-                  const client = clientById(inv.clientId);
-                  return {
-                    primary: inv.number, secondary: client ? client.name : 'Unknown client',
-                    meta: `${new Date(inv.issueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${INVOICE_STATUS_LABEL[invoiceStatusOf(inv)] || invoiceStatusOf(inv)}`,
-                    amount: invoiceTotal(inv),
-                  };
-                }),
-                totalLabel: 'Total (all invoices shown)',
-                total: filtered.reduce((s, inv) => s + invoiceTotal(inv), 0),
-              });
-            }}><FileText size={16} /> PDF summary</button>
-            <button className="btn btn-primary" data-tour="invoices-new" onClick={() => openModal('newInvoice', { items: [{ id: uid(), desc: '', qty: 1, price: '' }], issueDate: todayISO() })}><Plus size={16} /> New invoice</button>
-          </div>} />
+          action={<div className="sh-action-row">
+            <div className="sh-action-secondary">
+              <button className="btn btn-outline" onClick={() => exportInvoicesCsv(filtered)}><Download size={16} /> CSV</button>
+              <button className="btn btn-outline" onClick={() => exportInvoicesXlsx(filtered)}><Download size={16} /> Excel</button>
+              <button className="btn btn-outline" onClick={() => {
+                const sortLabels = { 'date:desc': 'date (newest first)', 'date:asc': 'date (oldest first)', 'client:asc': 'client (A–Z)', 'client:desc': 'client (Z–A)', 'total:desc': 'total (highest first)', 'total:asc': 'total (lowest first)', 'status:asc': 'status' };
+                setInvoiceSummaryDoc({
+                  title: 'Invoice Summary',
+                  sortLabel: sortLabels[`${invoiceSort.key}:${invoiceSort.dir}`] || 'date',
+                  count: filtered.length,
+                  rows: filtered.map((inv) => {
+                    const client = clientById(inv.clientId);
+                    return {
+                      primary: inv.number, secondary: client ? client.name : 'Unknown client',
+                      meta: `${new Date(inv.issueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${INVOICE_STATUS_LABEL[invoiceStatusOf(inv)] || invoiceStatusOf(inv)}`,
+                      amount: invoiceTotal(inv),
+                    };
+                  }),
+                  totalLabel: 'Total (all invoices shown)',
+                  total: filtered.reduce((s, inv) => s + invoiceTotal(inv), 0),
+                });
+              }}><FileText size={16} /> PDF summary</button>
+            </div>
+            <button className="btn btn-primary sh-action-primary" data-tour="invoices-new" onClick={() => openModal('newInvoice', { items: [{ id: uid(), desc: '', qty: 1, price: '' }], issueDate: todayISO() })}><Plus size={16} /> New invoice</button>
+          </div>} onTour={() => setTourStep(21)} />
         {overdueInvoices.length > 0 && (
           <div className="field-hint" style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <span>{overdueInvoices.length} invoice{overdueInvoices.length === 1 ? '' : 's'} overdue, totaling {fmt(overdueTotal)}.</span>
@@ -7017,12 +7110,12 @@ function App() {
           </div>
         )}
         <SearchBox className="loan-search" placeholder="Search by client or invoice number…" value={invoiceSearch} onChange={setInvoiceSearch} />
-        <div className="field-row" style={{ marginBottom: 14 }}>
-          <select className="kb-input" value={invoiceStatusFilter} onChange={(e) => setInvoiceStatusFilter(e.target.value)}>
+        <div className="field-row" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
+          <select className="kb-input" style={{ flex: '1 1 140px', minWidth: 0 }} value={invoiceStatusFilter} onChange={(e) => setInvoiceStatusFilter(e.target.value)}>
             <option value="All">All statuses</option>
             {Object.entries(INVOICE_STATUS_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
-          <select className="kb-input" value={`${invoiceSort.key}:${invoiceSort.dir}`} onChange={(e) => { const [key, dir] = e.target.value.split(':'); setInvoiceSort({ key, dir }); }}>
+          <select className="kb-input" style={{ flex: '1 1 160px', minWidth: 0 }} value={`${invoiceSort.key}:${invoiceSort.dir}`} onChange={(e) => { const [key, dir] = e.target.value.split(':'); setInvoiceSort({ key, dir }); }}>
             <option value="date:desc">Date (newest first)</option>
             <option value="date:asc">Date (oldest first)</option>
             <option value="client:asc">Client (A–Z)</option>
@@ -7118,29 +7211,31 @@ function App() {
     return (
       <>
         <SectionHeader eyebrow="Proof of payment" title="Receipts"
-          action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline" onClick={() => exportReceiptsCsv(filtered)}><Download size={16} /> CSV</button>
-            <button className="btn btn-outline" onClick={() => exportReceiptsXlsx(filtered)}><Download size={16} /> Excel</button>
-            <button className="btn btn-outline" onClick={() => {
-              const sortLabels = { 'date:desc': 'date (newest first)', 'date:asc': 'date (oldest first)', 'client:asc': 'payer (A–Z)', 'client:desc': 'payer (Z–A)', 'amount:desc': 'amount (highest first)', 'amount:asc': 'amount (lowest first)' };
-              setReceiptSummaryDoc({
-                title: 'Receipt Summary',
-                sortLabel: sortLabels[`${receiptSort.key}:${receiptSort.dir}`] || 'date',
-                count: filtered.length,
-                rows: filtered.map((r) => {
-                  const client = clientById(r.clientId);
-                  return {
-                    primary: r.receiptNo, secondary: client ? client.name : (r.clientName || 'Unknown payer'),
-                    meta: `${new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${r.voided ? 'Void' : r.status === 'draft' ? 'Draft' : 'Paid'}`,
-                    amount: Number(r.amount || 0),
-                  };
-                }),
-                totalLabel: 'Total (all receipts shown)',
-                total: filtered.reduce((s, r) => s + Number(r.amount || 0), 0),
-              });
-            }}><FileText size={16} /> PDF summary</button>
-            <button className="btn btn-primary" data-tour="receipts-new" onClick={() => openModal('newReceipt', { date: todayISO() })}><Plus size={16} /> Issue receipt</button>
-          </div>} />
+          action={<div className="sh-action-row">
+            <div className="sh-action-secondary">
+              <button className="btn btn-outline" onClick={() => exportReceiptsCsv(filtered)}><Download size={16} /> CSV</button>
+              <button className="btn btn-outline" onClick={() => exportReceiptsXlsx(filtered)}><Download size={16} /> Excel</button>
+              <button className="btn btn-outline" onClick={() => {
+                const sortLabels = { 'date:desc': 'date (newest first)', 'date:asc': 'date (oldest first)', 'client:asc': 'payer (A–Z)', 'client:desc': 'payer (Z–A)', 'amount:desc': 'amount (highest first)', 'amount:asc': 'amount (lowest first)' };
+                setReceiptSummaryDoc({
+                  title: 'Receipt Summary',
+                  sortLabel: sortLabels[`${receiptSort.key}:${receiptSort.dir}`] || 'date',
+                  count: filtered.length,
+                  rows: filtered.map((r) => {
+                    const client = clientById(r.clientId);
+                    return {
+                      primary: r.receiptNo, secondary: client ? client.name : (r.clientName || 'Unknown payer'),
+                      meta: `${new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} · ${r.voided ? 'Void' : r.status === 'draft' ? 'Draft' : 'Paid'}`,
+                      amount: Number(r.amount || 0),
+                    };
+                  }),
+                  totalLabel: 'Total (all receipts shown)',
+                  total: filtered.reduce((s, r) => s + Number(r.amount || 0), 0),
+                });
+              }}><FileText size={16} /> PDF summary</button>
+            </div>
+            <button className="btn btn-primary sh-action-primary" data-tour="receipts-new" onClick={() => openModal('newReceipt', { date: todayISO() })}><Plus size={16} /> Issue receipt</button>
+          </div>} onTour={() => setTourStep(23)} />
         <SearchBox className="loan-search" placeholder="Search by payer or receipt number…" value={receiptSearch} onChange={setReceiptSearch} />
         <div className="field-row" style={{ marginBottom: 14 }}>
           <select className="kb-input" value={`${receiptSort.key}:${receiptSort.dir}`} onChange={(e) => { const [key, dir] = e.target.value.split(':'); setReceiptSort({ key, dir }); }}>
@@ -7210,7 +7305,7 @@ function App() {
     const topCategory = spendByCategory[0];
     return (
       <>
-        <SectionHeader eyebrow="Expense & budgeting" title="Where your money is going" />
+        <SectionHeader eyebrow="Expense & budgeting" title="Where your money is going" onTour={() => setTourStep(26)} />
         <div className="stat-grid">
           <StatCard label="Spent this month" value={fmt(spentThisMonth)} icon={CreditCard} tone="brick" sub={`${expenses.filter((e) => e.date.slice(0, 7) === todayISO().slice(0, 7)).length} expense(s)`} />
           <StatCard label="Total logged" value={fmt(totalSpent)} icon={Wallet} tone="steel" sub={`${expenses.length} expense(s) all-time`} />
@@ -7275,7 +7370,7 @@ function App() {
           action={<div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-outline" onClick={() => exportExpensesCsv(filtered)}><Download size={16} /> Export CSV</button>
             <button className="btn btn-primary" data-tour="expenses-new" onClick={() => openModal('newExpense', { date: todayISO() })}><Plus size={16} /> Log expense</button>
-          </div>} />
+          </div>} onTour={() => setTourStep(27)} />
         <SearchBox className="loan-search" placeholder="Search by note or category…" value={expenseSearch} onChange={(v) => { setExpenseSearch(v); setExpenseShowCount(20); }} />
         <div className="field-row" style={{ marginBottom: 14 }}>
           <select className="kb-input" value={expenseCategoryFilter} onChange={(e) => { setExpenseCategoryFilter(e.target.value); setExpenseShowCount(20); }}>
@@ -7325,7 +7420,7 @@ function App() {
     return (
       <>
         <SectionHeader eyebrow="Stay within limits" title="Monthly budgets"
-          action={<button className="btn btn-primary" data-tour="budgets-new" onClick={() => openModal('setBudget', {})}><Plus size={16} /> Set a budget</button>} />
+          action={<button className="btn btn-primary" data-tour="budgets-new" onClick={() => openModal('setBudget', {})}><Plus size={16} /> Set a budget</button>} onTour={() => setTourStep(29)} />
         {budgets.length === 0 ? <EmptyState text="No budgets set yet — set a monthly limit for a category to start tracking against it." /> : (
           <div className="loan-list">
             {budgets.map((b) => {
@@ -8450,8 +8545,14 @@ function App() {
         .section-header-top{display:flex;flex-direction:column;}
         .section-header h2{font-size:24px;margin:0;font-weight:600;}
         .section-header-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;margin-top:14px;}
-        .section-header-actions>*{flex:0 0 auto;}
-        .section-header-actions>div{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;}
+        .section-header-actions>*{flex:1 1 auto;}
+        .section-header-actions>div{flex:1 1 auto;display:flex;flex-wrap:wrap;gap:8px;}
+        .section-header-actions>div>*{flex:1 1 auto;}
+        .section-header-tour-btn{flex:0 0 auto !important;white-space:nowrap;margin-left:auto;border:1.5px dashed var(--paper-line);color:var(--ink-soft);}
+        .sh-action-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;}
+        .sh-action-secondary{display:flex;flex-wrap:wrap;gap:8px;flex:1 1 auto;}
+        .sh-action-secondary>.btn{flex:1 1 auto;}
+        .sh-action-primary{flex:1 1 100%;}
         .stat-grid{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:22px;}
         .stat-card{background:var(--surface);border:1px solid var(--paper-line);border-radius:12px;padding:16px 18px;position:relative;flex:1 1 200px;min-width:200px;}
         .stat-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
@@ -8737,6 +8838,10 @@ function App() {
         .field .kb-input{width:100%;}
         .field-row{display:flex;gap:10px;}
         .field-row .field{flex:1;}
+        .filter-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1.5px solid var(--paper-line);background:var(--surface);font-size:12.5px;font-weight:500;color:var(--ink-soft);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .12s,border-color .12s,color .12s;}
+        .filter-chip:hover{border-color:var(--ink-soft);color:var(--ink);}
+        .filter-chip-active{border-color:var(--accent);background:var(--accent);color:#fff;}
+        .filter-chip-active:hover{background:var(--accent);color:#fff;}
         .checkbox-list{display:flex;flex-direction:column;gap:6px;max-height:150px;overflow-y:auto;border:1px solid var(--paper-line);border-radius:8px;padding:10px;}
         .swatch-picker{display:flex;flex-wrap:wrap;gap:8px;}
         .swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.08);transition:transform .1s;padding:0;}
@@ -9949,16 +10054,51 @@ function App() {
       )}
 
       {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} fmt={fmt} settings={settings} memberById={memberById} planById={planById} shareToWhatsApp={shareToWhatsApp} shareImageToWhatsApp={shareImageToWhatsApp} />}
-      {tabStatementDoc && (
-        <TabStatementModal
-          tab={tabStatementDoc.tab}
-          contact={tabStatementDoc.contact}
-          settings={settings}
-          fmt={fmt}
-          onClose={() => setTabStatementDoc(null)}
-          shareImageToWhatsApp={shareImageToWhatsApp}
-        />
-      )}
+      {tabStatementDoc && (() => {
+        // Re-resolve from live state so edits/deletes made from the summary
+        // reflect immediately instead of showing a stale snapshot.
+        const liveTab = loanTabs.find((t) => t.id === tabStatementDoc.tab.id) || tabStatementDoc.tab;
+        return (
+          <TabStatementModal
+            tab={liveTab}
+            contact={tabStatementDoc.contact}
+            settings={settings}
+            fmt={fmt}
+            onClose={() => setTabStatementDoc(null)}
+            shareImageToWhatsApp={shareImageToWhatsApp}
+            onEditEntry={(entry) => {
+              setTabStatementDoc(null);
+              openModal('editTabEntry', { tabId: liveTab.id, entryId: entry.id, type: entry.type, amount: entry.amount, date: entry.date, note: entry.note || '' });
+            }}
+            onDeleteEntry={(entry) => deleteTabEntry(liveTab.id, entry.id)}
+          />
+        );
+      })()}
+      {entryPreviewDoc && (() => {
+        const tab = loanTabs.find((t) => t.id === entryPreviewDoc.tabId);
+        const entry = tab && tab.entries.find((e) => e.id === entryPreviewDoc.entryId);
+        if (!tab || !entry) return null;
+        const contact = loanContactById(tab.contactId);
+        return (
+          <TabEntryReceiptModal
+            tab={tab}
+            entry={entry}
+            contact={contact}
+            settings={settings}
+            fmt={fmt}
+            onClose={() => setEntryPreviewDoc(null)}
+            onEdit={() => {
+              setEntryPreviewDoc(null);
+              openModal('editTabEntry', { tabId: tab.id, entryId: entry.id, type: entry.type, amount: entry.amount, date: entry.date, note: entry.note || '' });
+            }}
+            onDelete={() => {
+              setEntryPreviewDoc(null);
+              deleteTabEntry(tab.id, entry.id);
+            }}
+            shareImageToWhatsApp={shareImageToWhatsApp}
+          />
+        );
+      })()}
       {clientStatementDoc && (
         <ClientStatementModal
           client={clientStatementDoc}
